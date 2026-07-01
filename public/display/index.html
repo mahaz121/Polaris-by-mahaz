@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Office Display</title>
+  <link href="/css/styles.css?v=20260630-display-tech-palette" rel="stylesheet">
+</head>
+<body class="display-body cursor-none">
+  <div class="offline" id="offline"><div><h1>Connection Lost</h1><p>Trying to reconnect...</p></div></div>
+  <main class="display-shell" id="shell">
+    <header class="display-top">
+      <div class="brand-lockup">
+        <img id="logo" class="display-logo" hidden alt="">
+        <div class="company-title" id="company"></div>
+      </div>
+      <div class="weather"><img id="weatherIcon" hidden alt=""><span id="weatherText">--°</span></div>
+    </header>
+    <section class="employee-stage">
+      <div id="empty" class="empty-state" hidden>
+        <h1 class="employee-name">Unassigned</h1>
+        <p class="employee-title">No employee assigned</p>
+      </div>
+      <div id="overviewBlock" class="overview-board" hidden>
+        <div class="overview-head">
+          <div class="overview-brand">
+            <img id="overviewLogo" class="overview-logo" hidden alt="">
+            <div class="overview-brand-copy">
+              <div id="overviewCompany" class="overview-company"></div>
+              <div class="overview-meta"><span id="overviewTitle">Employee Status</span><span id="overviewCount"></span></div>
+            </div>
+          </div>
+          <div class="overview-side">
+            <div class="overview-weather"><img id="overviewWeatherIcon" hidden alt=""><span id="overviewWeatherText"></span></div>
+            <div class="overview-time"><span id="overviewClock"></span><span id="overviewDate"></span></div>
+          </div>
+        </div>
+        <div id="overviewGrid" class="overview-grid"></div>
+        <div class="overview-footer">
+          <div id="overviewNotice" class="overview-notice"></div>
+          <div id="overviewCompanyQr" class="overview-company-qr" hidden><img id="overviewCompanyQrImg" alt="Company QR"></div>
+        </div>
+      </div>
+      <div id="orgChartBlock" class="org-chart-board" hidden>
+        <div class="org-chart-head">
+          <div class="overview-brand">
+            <img id="orgLogo" class="overview-logo" hidden alt="">
+            <div class="overview-brand-copy">
+              <div id="orgCompany" class="overview-company"></div>
+              <div class="overview-meta"><span id="orgTitle">Organization Chart</span><span id="orgCount"></span></div>
+            </div>
+          </div>
+          <div class="overview-side">
+            <div class="overview-weather"><img id="orgWeatherIcon" hidden alt=""><span id="orgWeatherText"></span></div>
+            <div class="overview-time"><span id="orgClock"></span><span id="orgDate"></span></div>
+          </div>
+        </div>
+        <div class="org-chart-toolbar">
+          <button id="orgBack" type="button" class="org-chart-action">Back</button>
+          <button id="orgHome" type="button" class="org-chart-action">Home</button>
+          <div id="orgBreadcrumb" class="org-chart-breadcrumb"></div>
+        </div>
+        <div id="orgChartCanvas" class="org-chart-canvas"></div>
+        <aside id="orgDetail" class="org-detail-panel" hidden></aside>
+      </div>
+      <div id="employeeBlock" class="employee-grid">
+        <div class="portrait-wrap">
+          <img id="empPhoto" class="employee-photo" hidden alt="">
+          <div id="empInitials" class="initials-avatar"></div>
+        </div>
+        <div class="employee-copy">
+          <div id="statusBadge" class="display-status">Not Available</div>
+          <h1 class="employee-name" id="empName"></h1>
+          <div class="employee-title" id="empDesignation"></div>
+          <div class="employee-dept" id="empDepartment"></div>
+          <div class="employee-contact">
+            <span id="empExtension"></span>
+            <span id="empPhone"></span>
+            <span id="empEmail"></span>
+          </div>
+          <div id="statusNote" class="status-note"></div>
+        </div>
+        <div id="qrBox" class="qr" hidden><img id="qrImg" alt="QR Code"></div>
+      </div>
+    </section>
+    <footer class="display-bottom">
+      <div><div class="clock" id="clock"></div><div class="date" id="date"></div></div>
+      <div class="display-id" id="displayId"></div>
+    </footer>
+  </main>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/display.js?v=20260630-display-tech-palette"></script>
+</body>
+</html>

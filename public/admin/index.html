@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Admin - Polaris</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="/css/styles.css" rel="stylesheet">
+</head>
+<body>
+  <div class="container-fluid">
+    <div class="row">
+      <nav class="col-lg-2 sidebar p-3">
+        <h4 class="fw-bold mb-4"><i class="bi bi-terminal"></i><span>Polaris</span></h4>
+        <a href="#dashboard" class="nav-link active"><i class="bi bi-grid-1x2"></i><span>Dashboard</span></a>
+        <a href="#employees" class="nav-link"><i class="bi bi-people"></i><span>Employees</span></a>
+        <a href="#displays" class="nav-link"><i class="bi bi-display"></i><span>Displays</span></a>
+        <a href="#company-profiles" class="nav-link"><i class="bi bi-buildings"></i><span>Company Profiles</span></a>
+        <a href="#weather" class="nav-link"><i class="bi bi-cloud-sun"></i><span>Weather</span></a>
+        <a href="#zkteco" class="nav-link"><i class="bi bi-fingerprint"></i><span>ZKTeco</span></a>
+        <a href="#users" class="nav-link"><i class="bi bi-shield-lock"></i><span>Users</span></a>
+        <a href="#about-developer" class="nav-link"><i class="bi bi-code-square"></i><span>About Developer</span></a>
+        <hr>
+        <button id="logoutBtn" class="btn btn-outline-light w-100 btn-rounded"><i class="bi bi-box-arrow-right"></i> Logout</button>
+      </nav>
+      <main class="col-lg-10 p-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+          <div>
+            <h1 id="pageTitle" class="fw-bold mb-0">Dashboard</h1>
+            <div class="text-muted">Centralized display management</div>
+          </div>
+          <button id="themeBtn" class="btn btn-outline-secondary btn-rounded"><i class="bi bi-moon-stars"></i></button>
+        </div>
+        <div id="toastArea" class="toast-area"></div>
+        <section id="content"></section>
+      </main>
+    </div>
+  </div>
+  <div class="modal fade" id="modal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalTitle"></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" id="modalBody"></div>
+      </div>
+    </div>
+  </div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/js/admin.js?v=20260629-orgchart-departments"></script>
+</body>
+</html>

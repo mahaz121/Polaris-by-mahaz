@@ -1,0 +1,22 @@
+{
+  "company": {
+    "name": "",
+    "logo": "",
+    "primaryColor": "#132644",
+    "secondaryColor": "#8b8792",
+    "defaultFont": "Inter, Arial, sans-serif",
+    "clockFormat": "24",
+    "language": "English"
+  },
+  "weather": {
+    "apiKey": "",
+    "city": "Riyadh",
+    "units": "metric",
+    "lang": "en",
+    "lastFetched": null,
+    "data": null
+  },
+  "ui": {
+    "theme": "dark"
+  }
+}
