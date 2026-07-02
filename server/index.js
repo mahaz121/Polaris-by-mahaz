@@ -21,6 +21,7 @@ const { router: weatherRoutes, fetchWeather } = require('./routes/weather');
 const userRoutes = require('./routes/users');
 const displayPublicRoutes = require('./routes/displayPublic');
 const { router: zktecoRoutes, syncEnabledDevices } = require('./routes/zkteco');
+const { effectiveEmployeeStatus } = require('./utils/status');
 
 const app = express();
 const server = http.createServer(app);
@@ -65,6 +66,33 @@ app.get('/display/:id', requirePermission('display.access'), (req, res) => {
 app.get('/setup', requirePermission('display.access'), (req, res) => res.sendFile(path.join(root, 'public', 'setup', 'index.html')));
 
 app.use('/api/auth', authRoutes);
+app.get('/api/dashboard', requirePermission('dashboard.view'), async (req, res) => {
+  const { readJson } = require('./utils/dataStore');
+  const employees = await readJson('employees.json', []);
+  const displays = await readJson('displays.json', []);
+  const settings = await readJson('settings.json', {});
+  const available = employees.filter(employee => effectiveEmployeeStatus(employee).status === 'Available').length;
+  const online = displays.filter(display => display.status === 'Online').length;
+  res.json({
+    employees: {
+      total: employees.length,
+      inactive: employees.filter(employee => employee.status !== 'Active').length,
+      available,
+      unavailable: Math.max(0, employees.length - available)
+    },
+    displays: {
+      total: displays.length,
+      online,
+      offline: Math.max(0, displays.length - online)
+    },
+    weather: {
+      temperature: settings.weather?.data?.temperature ?? null,
+      city: settings.weather?.data?.city || settings.weather?.city || '',
+      description: settings.weather?.data?.description || '',
+      fetchedAt: settings.weather?.data?.fetchedAt || settings.weather?.lastFetched || ''
+    }
+  });
+});
 app.use('/api/company-profiles', requirePermission('companyProfiles.manage'), companyProfileRoutes);
 app.use('/api/display-public', requirePermission('display.access'), displayPublicRoutes);
 app.use('/api/display', requirePermission('display.access'), displayPublicRoutes);
