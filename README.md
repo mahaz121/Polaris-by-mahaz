@@ -7,13 +7,25 @@ Polaris-by-mahaz is a centralized digital office system for browser and Raspberr
 
 ## Features
 
-- Admin dashboard for employees, departments, displays, company profiles, settings, weather, users, and ZKTeco devices.
-- Public setup page for assigning a browser display.
-- Public display pages with live Socket.IO updates.
+- Admin dashboard for employees, departments, displays, company profiles, settings, weather, users, access rights, and ZKTeco devices.
+- Role-based access control for super admins, employee viewers, availability viewers, employee editors, display/kiosk users, and custom users.
+- Browser display pages for tablets, Android TV screens, Raspberry Pi displays, and normal desktop browsers.
+- Setup page for assigning a display screen to a saved display profile.
+- Live Socket.IO updates for display content and admin status.
+- Employee availability based on ZKTeco attendance punches.
+- Company profile switching for branding, logos, contact details, colors, QR behavior, and display styling.
+- Display modes for single employee signs, overview boards, and organization charts.
 - SQLite storage for production data.
 - QR vCard generation when enabled for an employee.
 - OpenWeather integration through server-side configuration.
 - Session-based admin authentication with bcrypt password hashes.
+
+## Who Uses Polaris
+
+- IT administrators use the admin dashboard to configure users, displays, company profiles, weather, ZKTeco devices, backups, and updates.
+- HR or reception staff can be given employee-only rights to view names, view availability, or edit employee records without receiving full system access.
+- Office display operators can be given display rights only, so a tablet or TV can open a display page without exposing the admin dashboard.
+- Employees and visitors only see the final display screens, such as room nameplates, availability boards, office overview screens, and organization charts.
 
 ## Requirements
 
@@ -241,7 +253,22 @@ Backups include `data/polaris.sqlite`, `public/uploads`, and `.env` when availab
 
 ## Display Setup
 
-First boot URL:
+Use display users for any unattended tablet, Android TV, Raspberry Pi browser, or reception screen. Do not log in as a super admin on kiosk devices.
+
+Create the display user:
+
+1. Sign in as a super admin.
+2. Open `Users`.
+3. Add a user with role `Display` or `Kiosk`, or use `Custom` with only `Open Displays / Setup`.
+4. Use a strong password and keep the account active.
+
+Create the display profile:
+
+1. Open `Displays`.
+2. Add a display and choose the display mode.
+3. Use the generated display ID in the display URL.
+
+Setup URL:
 
 ```text
 http://SERVER-IP:3004/setup
@@ -256,6 +283,70 @@ http://SERVER-IP:3004/display/display-id
 The browser stores only `display_id` in localStorage.
 
 Display and setup URLs require login. For Android FreeKiosk devices, create a normal active user with role `Display` or `Kiosk`, open the display URL once, sign in, and let the kiosk browser keep the session cookie. A display/kiosk user can open setup and display pages, but cannot open the admin dashboard or admin APIs.
+
+### Android Tablet With FreeKiosk
+
+Recommended for wall-mounted employee nameplates, reception tablets, meeting-room tablets, and small office display screens.
+
+App link:
+
+- FreeKiosk official site: https://freekiosk.app/
+- FreeKiosk GitHub: https://github.com/RushB-fr/freekiosk
+
+Basic setup:
+
+1. Install FreeKiosk on the Android tablet.
+2. Set the kiosk URL to the Polaris display URL:
+
+   ```text
+   http://SERVER-IP:3004/display/display-id
+   ```
+
+3. Open the URL once and log in using the `Display` or `Kiosk` user.
+4. Allow FreeKiosk to keep the browser session/cookies.
+5. Enable fullscreen/kiosk mode.
+6. Keep the tablet on the same network as the Polaris server, or use a stable domain/VPN/reverse proxy.
+
+For first assignment, you can use:
+
+```text
+http://SERVER-IP:3004/setup
+```
+
+After the display is assigned, use the direct `/display/display-id` URL for daily operation.
+
+### Android TV With Fully Kiosk
+
+Recommended for large office TVs, overview boards, organization charts, reception TVs, and unattended lobby screens.
+
+App links:
+
+- Fully Kiosk Browser on Google Play: https://play.google.com/store/apps/details?id=de.ozerov.fully
+- Fully Kiosk official site: https://www.fully-kiosk.com/
+
+Basic setup:
+
+1. Install Fully Kiosk Browser on the Android TV or Android TV box.
+2. Set the Start URL to the Polaris display URL:
+
+   ```text
+   http://SERVER-IP:3004/display/display-id
+   ```
+
+3. Open the URL once and log in using the `Display` or `Kiosk` user.
+4. Enable fullscreen mode and keep-screen-on settings.
+5. Enable autostart on boot if the TV should return to Polaris after power loss.
+6. Set a kiosk/admin PIN so users cannot exit the display accidentally.
+
+Android TV devices can be more restricted than normal Android tablets. If Google Play does not allow install on a TV model, use Fully Kiosk's official APK option from the Fully Kiosk website.
+
+### Display Network Notes
+
+- Use `http://SERVER-IP:3004` on the same LAN.
+- Use a domain with Nginx/HTTPS for production or remote access.
+- Use a VPN or secure tunnel when screens are outside the office network.
+- Keep the server timezone correct because employee availability depends on attendance punch times.
+- If the kiosk app shows the login page again, the session cookie was cleared or expired; log in again with the display/kiosk user.
 
 ## User Access Rights
 
@@ -280,6 +371,15 @@ Available rights:
 - Manage Fingerprint Devices
 - Create Users & Access Rights
 - Open Displays / Setup
+
+Common examples:
+
+- System owner: `Super Admin`.
+- HR viewer: `Employee Viewer` plus `View Availability Status` if they need live presence.
+- HR editor: `Employee Editor`.
+- Reception display tablet: `Display` or `Kiosk`.
+- TV overview board: `Display` or `Kiosk`.
+- User manager: `Create Users & Access Rights`, plus any other rights they also need.
 
 ## ZKTeco Sync
 
