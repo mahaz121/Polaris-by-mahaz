@@ -22,6 +22,7 @@ const userRoutes = require('./routes/users');
 const displayPublicRoutes = require('./routes/displayPublic');
 const { router: zktecoRoutes, syncEnabledDevices } = require('./routes/zkteco');
 const { effectiveEmployeeStatus } = require('./utils/status');
+const { dailyTimesheet, todayString } = require('./utils/timesheet');
 
 const app = express();
 const server = http.createServer(app);
@@ -96,6 +97,10 @@ app.get('/api/dashboard', requirePermission('dashboard.view'), async (req, res) 
 app.use('/api/company-profiles', requirePermission('companyProfiles.manage'), companyProfileRoutes);
 app.use('/api/display-public', requirePermission('display.access'), displayPublicRoutes);
 app.use('/api/display', requirePermission('display.access'), displayPublicRoutes);
+app.get('/api/timesheet', requireAnyPermission(['employees.manage', 'employeeStatus.view', 'zkteco.manage']), async (req, res) => {
+  if (req.query.sync === '1') await syncEnabledDevices([], true);
+  res.json(dailyTimesheet({ date: req.query.date || todayString() }));
+});
 app.get('/api/setup/displays', requirePermission('display.access'), async (req, res) => {
   const { readJson } = require('./utils/dataStore');
   const displays = await readJson('displays.json', []);

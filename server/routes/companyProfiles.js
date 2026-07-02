@@ -23,6 +23,9 @@ const upload = multer({
 
 function bodyProfile(req) {
   const emailDomain = String(req.body.emailDomain || '').trim().replace(/^@+/, '').toLowerCase();
+  const offDays = Array.isArray(req.body.offDays)
+    ? req.body.offDays
+    : String(req.body.offDays || '').split(',').map(item => item.trim()).filter(Boolean);
   return {
     name: req.body.name || '',
     logo: req.file ? `/uploads/${req.file.filename}` : undefined,
@@ -37,6 +40,10 @@ function bodyProfile(req) {
     companyEmail: req.body.companyEmail ?? req.body.email,
     companyWebsite: req.body.companyWebsite ?? req.body.website,
     companyAddress: req.body.companyAddress ?? req.body.address,
+    officeStartTime: req.body.officeStartTime || '07:30',
+    officeEndTime: req.body.officeEndTime || '16:00',
+    latestArrivalTime: req.body.latestArrivalTime || '08:30',
+    offDays,
     emailDomain
   };
 }

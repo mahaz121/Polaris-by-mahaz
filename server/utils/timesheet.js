@@ -1,8 +1,9 @@
-const { db } = require('./database');
+const { db, getActiveCompanyProfile, getRawSettings } = require('./database');
 const { effectiveEmployeeStatus } = require('./status');
 
-const DEFAULT_WORK_START = process.env.WORK_DAY_START || '08:00';
-const DEFAULT_WORK_END = process.env.WORK_DAY_END || '17:00';
+const DEFAULT_WORK_START = process.env.WORK_DAY_START || '07:30';
+const DEFAULT_WORK_END = process.env.WORK_DAY_END || '16:00';
+const DEFAULT_LATEST_ARRIVAL = process.env.LATEST_ARRIVAL_TIME || '08:30';
 
 function pad(value) {
   return String(value).padStart(2, '0');
@@ -19,6 +20,16 @@ function parseDateInput(value) {
 
 function localDateTime(date, time) {
   return new Date(`${date}T${time || '00:00'}:00`);
+}
+
+function minutesOfDay(time) {
+  const match = String(time || '').match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return 0;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function datePlusMinutes(date, minutes) {
+  return new Date(date.getTime() + minutes * 60000);
 }
 
 function formatDuration(ms) {
@@ -59,12 +70,31 @@ function buildSegments(logs, dayEnd = new Date()) {
   return segments;
 }
 
-function dailyTimesheet({ date, workStart = DEFAULT_WORK_START, workEnd = DEFAULT_WORK_END } = {}) {
+function officeTiming() {
+  const settings = getRawSettings({});
+  const profile = getActiveCompanyProfile(false) || {};
+  return {
+    workStart: profile.officeStartTime || settings.office?.startTime || DEFAULT_WORK_START,
+    workEnd: profile.officeEndTime || settings.office?.endTime || DEFAULT_WORK_END,
+    latestArrivalTime: profile.latestArrivalTime || settings.office?.latestArrivalTime || DEFAULT_LATEST_ARRIVAL,
+    offDays: Array.isArray(profile.offDays) ? profile.offDays : (Array.isArray(settings.office?.offDays) ? settings.office.offDays : [])
+  };
+}
+
+function dailyTimesheet({ date, workStart, workEnd, latestArrivalTime, offDays } = {}) {
+  const timing = officeTiming();
   const day = parseDateInput(date);
+  workStart = workStart || timing.workStart;
+  workEnd = workEnd || timing.workEnd;
+  latestArrivalTime = latestArrivalTime || timing.latestArrivalTime;
+  offDays = Array.isArray(offDays) ? offDays : timing.offDays;
   const dayStart = localDateTime(day, '00:00');
   const dayEnd = localDateTime(day, '23:59');
   const workStartAt = localDateTime(day, workStart);
   const workEndAt = localDateTime(day, workEnd);
+  const latestArrivalAt = localDateTime(day, latestArrivalTime);
+  const baseWorkMinutes = Math.max(0, minutesOfDay(workEnd) - minutesOfDay(workStart));
+  const isOffDay = offDays.includes(String(dayStart.getDay()));
   const employees = db.prepare(`
     SELECT id, employee_number, name, department, designation, status
     FROM employees
@@ -88,15 +118,19 @@ function dailyTimesheet({ date, workStart = DEFAULT_WORK_START, workEnd = DEFAUL
     const employeeLogs = byEmployee.get(employee.employee_number || '') || [];
     const segments = buildSegments(employeeLogs, openSegmentEnd);
     const insideMs = segments.reduce((sum, segment) => sum + Math.max(0, segment.end - segment.start), 0);
-    const insideDuringWorkMs = segments.reduce((sum, segment) => sum + overlaps(segment.start, segment.end, workStartAt, workEndAt), 0);
-    const workMs = Math.max(0, workEndAt - workStartAt);
-    const outsideDuringWorkMs = Math.max(0, workMs - insideDuringWorkMs);
     const firstIn = employeeLogs.find((log, index) => punchDirection(log, index) === 'in');
-    const lastOut = [...employeeLogs].reverse().find((log, index, reversed) => {
+    const lastOut = [...employeeLogs].reverse().find((log, index) => {
       const originalIndex = employeeLogs.length - 1 - index;
       return punchDirection(log, originalIndex) === 'out';
     });
     const hasOpenSegment = segments.some(segment => segment.open);
+    const firstInAt = firstIn ? new Date(firstIn.punch_time) : null;
+    const arrivalForSchedule = firstInAt && firstInAt > workStartAt ? new Date(Math.min(firstInAt.getTime(), latestArrivalAt.getTime())) : workStartAt;
+    const expectedOutAt = isOffDay ? null : datePlusMinutes(arrivalForSchedule, baseWorkMinutes);
+    const scheduledEndAt = expectedOutAt && expectedOutAt > workEndAt ? expectedOutAt : workEndAt;
+    const scheduledWorkMs = isOffDay ? 0 : Math.max(0, scheduledEndAt - workStartAt);
+    const scheduledInsideMs = isOffDay ? 0 : segments.reduce((sum, segment) => sum + overlaps(segment.start, segment.end, workStartAt, scheduledEndAt), 0);
+    const scheduledOutsideMs = Math.max(0, scheduledWorkMs - scheduledInsideMs);
     return {
       employeeId: employee.id,
       employeeNumber: employee.employee_number || '',
@@ -105,13 +139,14 @@ function dailyTimesheet({ date, workStart = DEFAULT_WORK_START, workEnd = DEFAUL
       designation: employee.designation || '',
       firstIn: firstIn?.punch_time || '',
       lastOut: lastOut?.punch_time || '',
+      expectedOut: expectedOutAt ? expectedOutAt.toISOString() : '',
       punchCount: employeeLogs.length,
       insideMinutes: Math.round(insideMs / 60000),
       inside: formatDuration(insideMs),
-      insideDuringWorkMinutes: Math.round(insideDuringWorkMs / 60000),
-      insideDuringWork: formatDuration(insideDuringWorkMs),
-      outsideDuringWorkMinutes: Math.round(outsideDuringWorkMs / 60000),
-      outsideDuringWork: formatDuration(outsideDuringWorkMs),
+      insideDuringWorkMinutes: Math.round(scheduledInsideMs / 60000),
+      insideDuringWork: formatDuration(scheduledInsideMs),
+      outsideDuringWorkMinutes: Math.round(scheduledOutsideMs / 60000),
+      outsideDuringWork: formatDuration(scheduledOutsideMs),
       status: hasOpenSegment ? 'Inside now' : (employeeLogs.length ? 'Checked out' : 'No punches'),
       liveStatus: effectiveEmployeeStatus({ ...employee, employeeNumber: employee.employee_number }).status
     };
@@ -130,6 +165,9 @@ function dailyTimesheet({ date, workStart = DEFAULT_WORK_START, workEnd = DEFAUL
     date: day,
     workStart,
     workEnd,
+    latestArrivalTime,
+    offDays,
+    isOffDay,
     totals: {
       ...totals,
       inside: formatDuration(totals.insideMinutes * 60000),

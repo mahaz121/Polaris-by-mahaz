@@ -172,6 +172,10 @@ function initDatabase() {
       company_website TEXT,
       company_address TEXT,
       company_notice TEXT,
+      office_start_time TEXT DEFAULT '07:30',
+      office_end_time TEXT DEFAULT '16:00',
+      latest_arrival_time TEXT DEFAULT '08:30',
+      off_days TEXT,
       weather_city TEXT,
       open_weather_api_key TEXT,
       weather_lang TEXT,
@@ -265,6 +269,10 @@ function initDatabase() {
   ensureColumn('displays', 'overview_employee_order', 'TEXT');
   ensureColumn('displays', 'overview_employee_order_by_department', 'TEXT');
   ensureColumn('company_profiles', 'font_color', "TEXT DEFAULT '#FFFFFF'");
+  ensureColumn('company_profiles', 'office_start_time', "TEXT DEFAULT '07:30'");
+  ensureColumn('company_profiles', 'office_end_time', "TEXT DEFAULT '16:00'");
+  ensureColumn('company_profiles', 'latest_arrival_time', "TEXT DEFAULT '08:30'");
+  ensureColumn('company_profiles', 'off_days', 'TEXT');
   migrateJsonOnce();
   ensureDepartmentsFromEmployees();
   removeDefaultCompanyName();
@@ -442,6 +450,7 @@ function slugify(value, fallback = 'company-profile') {
 
 function profileFromSettings(settings, overrides = {}) {
   const company = settings?.company || {};
+  const office = settings?.office || {};
   const weather = settings?.weather || {};
   const stamp = nowIso();
   return {
@@ -462,6 +471,10 @@ function profileFromSettings(settings, overrides = {}) {
     companyWebsite: company.companyWebsite || company.website || '',
     companyAddress: company.companyAddress || company.address || '',
     companyNotice: '',
+    officeStartTime: office.startTime || company.officeStartTime || '07:30',
+    officeEndTime: office.endTime || company.officeEndTime || '16:00',
+    latestArrivalTime: office.latestArrivalTime || company.latestArrivalTime || '08:30',
+    offDays: Array.isArray(office.offDays) ? office.offDays : [],
     weatherCity: '',
     openWeatherApiKey: '',
     weatherLang: '',
@@ -497,6 +510,10 @@ function mapCompanyProfile(row, includeSecret = true) {
     email: row.company_email || '',
     website: row.company_website || '',
     address: row.company_address || '',
+    officeStartTime: row.office_start_time || '07:30',
+    officeEndTime: row.office_end_time || '16:00',
+    latestArrivalTime: row.latest_arrival_time || '08:30',
+    offDays: parseJson(row.off_days, []),
     emailDomain: String(row.email_domain || '').trim().replace(/^@+/, '').toLowerCase(),
     isActive: !!row.is_active,
     createdAt: row.created_at,
@@ -507,11 +524,11 @@ function mapCompanyProfile(row, includeSecret = true) {
 const insertCompanyProfileStmt = () => db.prepare(`
   INSERT INTO company_profiles
   (id, name, slug, logo, primary_color, secondary_color, accent_color, font_color, background_style, display_font, clock_format, language,
-   company_phone, company_email, company_website, company_address, company_notice, weather_city, open_weather_api_key,
+   company_phone, company_email, company_website, company_address, company_notice, office_start_time, office_end_time, latest_arrival_time, off_days, weather_city, open_weather_api_key,
    weather_lang, weather_units, email_domain, weather_data, weather_last_fetched, is_active, created_at, updated_at)
   VALUES
   (@id, @name, @slug, @logo, @primaryColor, @secondaryColor, @accentColor, @fontColor, @backgroundStyle, @displayFont, @clockFormat, @language,
-   @companyPhone, @companyEmail, @companyWebsite, @companyAddress, @companyNotice, @weatherCity, @openWeatherApiKey,
+   @companyPhone, @companyEmail, @companyWebsite, @companyAddress, @companyNotice, @officeStartTime, @officeEndTime, @latestArrivalTime, @offDaysJson, @weatherCity, @openWeatherApiKey,
    @weatherLang, @weatherUnits, @emailDomain, @weatherDataJson, @weatherLastFetched, @isActiveInt, @createdAt, @updatedAt)
 `);
 
@@ -520,6 +537,10 @@ function profileDbParams(profile) {
     ...profile,
     fontColor: profile.fontColor || '#FFFFFF',
     companyNotice: profile.companyNotice || '',
+    officeStartTime: profile.officeStartTime || '07:30',
+    officeEndTime: profile.officeEndTime || '16:00',
+    latestArrivalTime: profile.latestArrivalTime || '08:30',
+    offDaysJson: json(Array.isArray(profile.offDays) ? profile.offDays : []),
     weatherCity: '',
     openWeatherApiKey: '',
     weatherLang: '',
@@ -610,6 +631,13 @@ function companyProfileToSettings(profile, settings = getRawSettings(defaults.se
     notice: '',
     emailDomain: profile.emailDomain || ''
   };
+  next.office = {
+    ...(next.office || {}),
+    startTime: profile.officeStartTime || '07:30',
+    endTime: profile.officeEndTime || '16:00',
+    latestArrivalTime: profile.latestArrivalTime || '08:30',
+    offDays: Array.isArray(profile.offDays) ? profile.offDays : []
+  };
   next.weather = next.weather || defaults.settings.weather;
   next.activeCompanyProfileId = profile.id;
   return next;
@@ -669,6 +697,10 @@ function createCompanyProfile(input = {}) {
     companyWebsite: input.companyWebsite || input.website || '',
     companyAddress: input.companyAddress || input.address || '',
     companyNotice: '',
+    officeStartTime: input.officeStartTime || '07:30',
+    officeEndTime: input.officeEndTime || '16:00',
+    latestArrivalTime: input.latestArrivalTime || '08:30',
+    offDays: Array.isArray(input.offDays) ? input.offDays : [],
     weatherCity: '',
     openWeatherApiKey: '',
     weatherLang: '',
@@ -706,6 +738,10 @@ function updateCompanyProfile(id, input = {}) {
     companyWebsite: input.companyWebsite ?? input.website ?? current.companyWebsite,
     companyAddress: input.companyAddress ?? input.address ?? current.companyAddress,
     companyNotice: '',
+    officeStartTime: input.officeStartTime ?? current.officeStartTime,
+    officeEndTime: input.officeEndTime ?? current.officeEndTime,
+    latestArrivalTime: input.latestArrivalTime ?? current.latestArrivalTime,
+    offDays: Array.isArray(input.offDays) ? input.offDays : current.offDays,
     weatherCity: '',
     openWeatherApiKey: '',
     weatherLang: '',
@@ -718,7 +754,8 @@ function updateCompanyProfile(id, input = {}) {
       name=@name, logo=@logo, primary_color=@primaryColor, secondary_color=@secondaryColor, accent_color=@accentColor, font_color=@fontColor,
       background_style=@backgroundStyle, display_font=@displayFont, clock_format=@clockFormat, language=@language,
       company_phone=@companyPhone, company_email=@companyEmail, company_website=@companyWebsite, company_address=@companyAddress,
-      company_notice=@companyNotice, weather_city=@weatherCity, open_weather_api_key=@openWeatherApiKey, weather_lang=@weatherLang,
+      company_notice=@companyNotice, office_start_time=@officeStartTime, office_end_time=@officeEndTime, latest_arrival_time=@latestArrivalTime,
+      off_days=@offDaysJson, weather_city=@weatherCity, open_weather_api_key=@openWeatherApiKey, weather_lang=@weatherLang,
       weather_units=@weatherUnits, email_domain=@emailDomain, updated_at=@updatedAt
     WHERE id=@id
   `).run(profileDbParams(next));
@@ -1093,6 +1130,7 @@ module.exports = {
   updateJson,
   ensureFile,
   nowIso,
+  getRawSettings,
   mapEmployee,
   mapDepartment,
   mapDisplay,

@@ -220,7 +220,7 @@ async function load() {
     can('weather.manage') ? api('/api/settings') : Promise.resolve({}),
     can('users.manage') ? api('/api/users') : Promise.resolve([]),
     can('zkteco.manage') ? api('/api/zkteco/devices') : Promise.resolve([]),
-    can('zkteco.manage') ? api(`/api/zkteco/timesheet?date=${encodeURIComponent(timesheetDate)}`) : Promise.resolve(null),
+    can('employees.manage') || can('employeeStatus.view') ? api(`/api/timesheet?date=${encodeURIComponent(timesheetDate)}`) : Promise.resolve(null),
     can('companyProfiles.manage') ? api('/api/company-profiles') : Promise.resolve([])
   ]);
   state = {
@@ -445,6 +445,7 @@ function employees() {
   const canEditEmployees = hasPermission('employees.manage');
   const canViewNames = canEditEmployees || hasPermission('employees.view');
   const canViewStatus = canEditEmployees || hasPermission('employeeStatus.view');
+  const canViewTimesheet = canEditEmployees || hasPermission('employeeStatus.view');
   const statusHead = canViewStatus ? '<th>Status</th>' : '';
   const actionHead = canEditEmployees ? '<th></th>' : '';
   const controls = canEditEmployees ? `
@@ -454,6 +455,7 @@ function employees() {
     <div class="d-flex gap-2 mb-3">
       <input id="searchEmp" class="form-control" placeholder="Search employees">
       ${canViewStatus ? `<select id="statusFilter" class="form-select w-auto"><option value="">All status</option>${statuses.map(s => `<option>${s}</option>`).join('')}</select>` : ''}
+      ${canViewTimesheet ? '<button class="btn btn-outline-primary btn-rounded" id="timesheetBtn"><i class="bi bi-calendar-week"></i> Timesheet</button>' : ''}
       ${controls}
     </div>
     <div class="card table-card"><table class="table table-hover align-middle mb-0"><thead><tr><th>Employee</th><th>Designation</th><th>Department</th>${canEditEmployees ? '<th>Company Email</th><th>Ext.</th>' : ''}<th>Group</th>${statusHead}<th>Display</th>${actionHead}</tr></thead><tbody>
@@ -474,6 +476,7 @@ function employees() {
     document.querySelectorAll('.edit-emp').forEach(b => b.onclick = () => employeeForm(b.dataset.id));
     document.querySelectorAll('.del-emp').forEach(b => b.onclick = () => deleteEmployee(b.dataset.id));
   }
+  if (canViewTimesheet) $('#timesheetBtn').onclick = () => timesheetView();
   const filter = () => {
     const q = $('#searchEmp').value.toLowerCase();
     const s = $('#statusFilter') ? $('#statusFilter').value : '';
@@ -605,6 +608,84 @@ function employeeForm(id = '') {
     await api(id ? `/api/employees/${id}` : '/api/employees/', { method: id ? 'PUT' : 'POST', body: new FormData(ev.target) });
     modal.hide(); toast('Employee saved'); route();
   };
+}
+
+function timesheetCsv(timesheet) {
+  const header = ['Employee', 'Employee Number', 'Department', 'First In', 'Last Out', 'Expected Out', 'Inside', 'Inside Work Hours', 'Outside Work Hours', 'Punches', 'Status', 'Live Status'];
+  const rows = (timesheet.rows || []).map(row => [
+    row.name,
+    row.employeeNumber,
+    row.department,
+    localDateTime(row.firstIn),
+    localDateTime(row.lastOut),
+    localDateTime(row.expectedOut),
+    row.inside,
+    row.insideDuringWork,
+    row.outsideDuringWork,
+    row.punchCount,
+    row.status,
+    row.liveStatus
+  ]);
+  return [header, ...rows].map(row => row.map(value => `"${String(value == null ? '' : value).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+}
+
+function exportTimesheet(timesheet) {
+  const blob = new Blob([timesheetCsv(timesheet)], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `polaris-timesheet-${timesheet.date || todayInputValue()}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function loadTimesheet(date, sync = false) {
+  const url = `/api/timesheet?date=${encodeURIComponent(date || todayInputValue())}${sync ? '&sync=1' : ''}`;
+  state.timesheet = await api(url);
+}
+
+async function timesheetView(sync = false) {
+  setTitle('Timesheet');
+  const selectedDate = sessionStorage.getItem('polaris_timesheet_date') || todayInputValue();
+  await loadTimesheet(selectedDate, sync);
+  const timesheet = state.timesheet || { rows: [], totals: {}, date: selectedDate, workStart: '07:30', workEnd: '16:00', latestArrivalTime: '08:30', offDays: [] };
+  content.innerHTML = `
+    <div class="d-flex align-items-end justify-content-between gap-3 flex-wrap mb-3">
+      <div>
+        <h3 class="h5 mb-1">Daily Timesheet</h3>
+        <div class="text-muted small">Office timing ${esc(timesheet.workStart)} - ${esc(timesheet.workEnd)}. Latest arrival ${esc(timesheet.latestArrivalTime)}. Expected checkout adjusts by arrival time.</div>
+      </div>
+      <div class="d-flex gap-2 align-items-end flex-wrap">
+        <div><label class="form-label small">Date</label><input id="timesheetDate" class="form-control" type="date" value="${esc(timesheet.date || todayInputValue())}"></div>
+        <button class="btn btn-outline-primary" id="timesheetRefresh"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+        <button class="btn btn-outline-secondary" id="timesheetSync"><i class="bi bi-arrow-repeat"></i> Sync Device</button>
+        <button class="btn btn-primary" id="timesheetExport"><i class="bi bi-file-earmark-spreadsheet"></i> Export Excel</button>
+        <button class="btn btn-outline-secondary" id="timesheetBack"><i class="bi bi-arrow-left"></i> Employees</button>
+      </div>
+    </div>
+    ${timesheet.isOffDay ? '<div class="alert alert-warning">This date is configured as an off day.</div>' : ''}
+    <section class="dashboard-kpis mb-3">
+      <article class="dashboard-kpi"><div class="dashboard-kpi-icon"><i class="bi bi-person-check"></i></div><div><span>Inside Now</span><strong>${esc(timesheet.totals.insideNow || 0)}</strong><small>${esc(timesheet.totals.withPunches || 0)} employees with punches</small></div></article>
+      <article class="dashboard-kpi"><div class="dashboard-kpi-icon"><i class="bi bi-clock-history"></i></div><div><span>Total Inside</span><strong>${esc(timesheet.totals.inside || '0h 0m')}</strong><small>All employees</small></div></article>
+      <article class="dashboard-kpi"><div class="dashboard-kpi-icon"><i class="bi bi-building-check"></i></div><div><span>Inside Work Hours</span><strong>${esc(timesheet.totals.insideDuringWork || '0h 0m')}</strong><small>Adjusted schedule</small></div></article>
+      <article class="dashboard-kpi"><div class="dashboard-kpi-icon"><i class="bi bi-door-open"></i></div><div><span>Outside Work Hours</span><strong>${esc(timesheet.totals.outsideDuringWork || '0h 0m')}</strong><small>Adjusted schedule</small></div></article>
+    </section>
+    <div class="card table-card"><table class="table table-hover align-middle mb-0"><thead><tr><th>Employee</th><th>Department</th><th>First In</th><th>Last Out</th><th>Expected Out</th><th>Inside</th><th>Outside Work Hours</th><th>Punches</th><th>Status</th></tr></thead><tbody>
+      ${(timesheet.rows || []).map(row => `<tr><td><strong>${esc(row.name)}</strong><br><small class="text-muted">${esc(row.employeeNumber)}</small></td><td>${esc(row.department || '-')}</td><td>${esc(localDateTime(row.firstIn))}</td><td>${esc(localDateTime(row.lastOut))}</td><td>${esc(localDateTime(row.expectedOut))}</td><td>${esc(row.inside || '0h 0m')}</td><td>${esc(row.outsideDuringWork || '0h 0m')}</td><td>${esc(row.punchCount || 0)}</td><td><span class="badge ${row.status === 'Inside now' ? 'bg-success' : row.status === 'No punches' ? 'bg-secondary' : 'bg-primary'}">${esc(row.status)}</span><br><small class="text-muted">${esc(row.liveStatus || '')}</small></td></tr>`).join('')}
+    </tbody></table></div>`;
+  $('#timesheetRefresh').onclick = () => {
+    sessionStorage.setItem('polaris_timesheet_date', $('#timesheetDate').value || todayInputValue());
+    timesheetView(false);
+  };
+  $('#timesheetDate').onchange = $('#timesheetRefresh').onclick;
+  $('#timesheetSync').onclick = () => {
+    sessionStorage.setItem('polaris_timesheet_date', $('#timesheetDate').value || todayInputValue());
+    timesheetView(true);
+  };
+  $('#timesheetExport').onclick = () => exportTimesheet(timesheet);
+  $('#timesheetBack').onclick = () => employees();
 }
 
 function overrideForm(id) {
@@ -1118,6 +1199,7 @@ function profileCard(profile) {
 }
 
 function companyProfileForm(id = '') {
+  const weekDays = [['0', 'Sunday'], ['1', 'Monday'], ['2', 'Tuesday'], ['3', 'Wednesday'], ['4', 'Thursday'], ['5', 'Friday'], ['6', 'Saturday']];
   const profile = state.companyProfiles.find(item => item.id === id) || {
     primaryColor: '#132644',
     secondaryColor: '#8b8792',
@@ -1125,8 +1207,13 @@ function companyProfileForm(id = '') {
     backgroundStyle: 'default',
     displayFont: 'Inter, Arial, sans-serif',
     clockFormat: '24',
-    language: 'English'
+    language: 'English',
+    officeStartTime: '07:30',
+    officeEndTime: '16:00',
+    latestArrivalTime: '08:30',
+    offDays: ['5', '6']
   };
+  const offDays = new Set(Array.isArray(profile.offDays) ? profile.offDays.map(String) : []);
   $('#modalTitle').textContent = id ? 'Edit Company Profile' : 'Add Company Profile';
   $('#modalBody').innerHTML = `<form id="profileForm" enctype="multipart/form-data">
     <div class="row g-3">
@@ -1143,6 +1230,15 @@ function companyProfileForm(id = '') {
       <div class="col-md-4"><label class="form-label">Website</label><input name="companyWebsite" class="form-control" value="${esc(profile.companyWebsite)}"></div>
       <div class="col-md-6"><label class="form-label">Address</label><input name="companyAddress" class="form-control" value="${esc(profile.companyAddress)}"></div>
       <div class="col-md-6"><label class="form-label">Company Email Domain</label><input name="emailDomain" class="form-control" placeholder="example: mahaz.uk" value="${esc(profile.emailDomain)}"></div>
+      <div class="col-md-4"><label class="form-label">Office Start Time</label><input name="officeStartTime" type="time" class="form-control" value="${esc(profile.officeStartTime || '07:30')}"></div>
+      <div class="col-md-4"><label class="form-label">Office End Time</label><input name="officeEndTime" type="time" class="form-control" value="${esc(profile.officeEndTime || '16:00')}"></div>
+      <div class="col-md-4"><label class="form-label">Latest Arrival Time</label><input name="latestArrivalTime" type="time" class="form-control" value="${esc(profile.latestArrivalTime || '08:30')}"></div>
+      <div class="col-12">
+        <label class="form-label">Off Days</label>
+        <div class="row g-2">
+          ${weekDays.map(([value, label]) => `<div class="col-md-3 col-sm-4"><label class="form-check border rounded px-3 py-2 h-100"><input class="form-check-input me-2" name="offDays" type="checkbox" value="${esc(value)}" ${offDays.has(value) ? 'checked' : ''}>${esc(label)}</label></div>`).join('')}
+        </div>
+      </div>
     </div>
     <div class="profile-preview mt-4" id="profileLivePreview" style="--preview-primary:${esc(profile.primaryColor || '#132644')};--preview-secondary:${esc(profile.secondaryColor || '#8b8792')};--preview-accent:${esc(profile.accentColor || profile.secondaryColor || '#38bdf8')}">
       <div class="profile-preview-logo profile-preview-empty"><i class="bi bi-display"></i></div>
@@ -1231,39 +1327,9 @@ async function weather() {
 }
 function zkteco() {
   setTitle('ZKTeco');
-  const timesheet = state.timesheet || { rows: [], totals: {}, date: todayInputValue(), workStart: '08:00', workEnd: '17:00' };
-  content.innerHTML = `
-    <div class="d-flex gap-2 mb-3 flex-wrap">
-      <button class="btn btn-primary btn-rounded" id="addDeviceBtn"><i class="bi bi-plus-lg"></i> Add Device</button>
-      <button class="btn btn-outline-secondary btn-rounded" id="syncBtn"><i class="bi bi-arrow-repeat"></i> Sync Now</button>
-    </div>
-    <div class="card table-card mb-4"><table class="table mb-0"><thead><tr><th>Name</th><th>IP</th><th>Port</th><th>Enabled</th><th>Interval</th><th>Last Sync</th><th>Error</th><th></th></tr></thead><tbody>${state.devices.map(d => `<tr><td>${esc(d.name)}</td><td>${esc(d.ip)}</td><td>${esc(d.port)}</td><td>${d.enabled ? 'Yes' : 'No'}</td><td>${esc(d.pollingInterval)}s</td><td>${esc(d.lastSyncAt || '')}</td><td>${esc(d.lastError || '')}</td><td class="text-end"><button class="btn btn-sm btn-outline-primary edit-device" data-id="${d.id}"><i class="bi bi-pencil"></i></button> <button class="btn btn-sm btn-outline-danger del-device" data-id="${d.id}"><i class="bi bi-trash"></i></button></td></tr>`).join('')}</tbody></table></div>
-    <div class="d-flex align-items-end justify-content-between gap-3 flex-wrap mb-3">
-      <div>
-        <h3 class="h5 mb-1">Daily Timesheet</h3>
-        <div class="text-muted small">Inside/outside hours are calculated from fingerprint punches during working hours ${esc(timesheet.workStart)} - ${esc(timesheet.workEnd)}.</div>
-      </div>
-      <div class="d-flex gap-2 align-items-end">
-        <div><label class="form-label small">Date</label><input id="timesheetDate" class="form-control" type="date" value="${esc(timesheet.date || todayInputValue())}"></div>
-        <button class="btn btn-outline-primary" id="timesheetRefresh"><i class="bi bi-arrow-clockwise"></i></button>
-      </div>
-    </div>
-    <section class="dashboard-kpis mb-3">
-      <article class="dashboard-kpi"><div class="dashboard-kpi-icon"><i class="bi bi-person-check"></i></div><div><span>Inside Now</span><strong>${esc(timesheet.totals.insideNow || 0)}</strong><small>${esc(timesheet.totals.withPunches || 0)} employees with punches</small></div></article>
-      <article class="dashboard-kpi"><div class="dashboard-kpi-icon"><i class="bi bi-clock-history"></i></div><div><span>Total Inside</span><strong>${esc(timesheet.totals.inside || '0h 0m')}</strong><small>All employees</small></div></article>
-      <article class="dashboard-kpi"><div class="dashboard-kpi-icon"><i class="bi bi-building-check"></i></div><div><span>Inside Work Hours</span><strong>${esc(timesheet.totals.insideDuringWork || '0h 0m')}</strong><small>Within schedule</small></div></article>
-      <article class="dashboard-kpi"><div class="dashboard-kpi-icon"><i class="bi bi-door-open"></i></div><div><span>Outside Work Hours</span><strong>${esc(timesheet.totals.outsideDuringWork || '0h 0m')}</strong><small>Within schedule</small></div></article>
-    </section>
-    <div class="card table-card"><table class="table table-hover align-middle mb-0"><thead><tr><th>Employee</th><th>Department</th><th>First In</th><th>Last Out</th><th>Inside</th><th>Outside Work Hours</th><th>Punches</th><th>Status</th></tr></thead><tbody>
-      ${timesheet.rows.map(row => `<tr><td><strong>${esc(row.name)}</strong><br><small class="text-muted">${esc(row.employeeNumber)}</small></td><td>${esc(row.department || '-')}</td><td>${esc(localDateTime(row.firstIn))}</td><td>${esc(localDateTime(row.lastOut))}</td><td>${esc(row.inside || '0h 0m')}</td><td>${esc(row.outsideDuringWork || '0h 0m')}</td><td>${esc(row.punchCount || 0)}</td><td><span class="badge ${row.status === 'Inside now' ? 'bg-success' : row.status === 'No punches' ? 'bg-secondary' : 'bg-primary'}">${esc(row.status)}</span><br><small class="text-muted">${esc(row.liveStatus || '')}</small></td></tr>`).join('')}
-    </tbody></table></div>`;
+  content.innerHTML = `<button class="btn btn-primary btn-rounded mb-3" id="addDeviceBtn"><i class="bi bi-plus-lg"></i> Add Device</button> <button class="btn btn-outline-secondary btn-rounded mb-3" id="syncBtn"><i class="bi bi-arrow-repeat"></i> Sync Now</button><div class="card table-card"><table class="table mb-0"><thead><tr><th>Name</th><th>IP</th><th>Port</th><th>Enabled</th><th>Interval</th><th>Last Sync</th><th>Error</th><th></th></tr></thead><tbody>${state.devices.map(d => `<tr><td>${esc(d.name)}</td><td>${esc(d.ip)}</td><td>${esc(d.port)}</td><td>${d.enabled ? 'Yes' : 'No'}</td><td>${esc(d.pollingInterval)}s</td><td>${esc(d.lastSyncAt || '')}</td><td>${esc(d.lastError || '')}</td><td class="text-end"><button class="btn btn-sm btn-outline-primary edit-device" data-id="${d.id}"><i class="bi bi-pencil"></i></button> <button class="btn btn-sm btn-outline-danger del-device" data-id="${d.id}"><i class="bi bi-trash"></i></button></td></tr>`).join('')}</tbody></table></div>`;
   $('#addDeviceBtn').onclick = () => deviceForm();
   $('#syncBtn').onclick = async () => { const r = await api('/api/zkteco/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); const hasErrors = r.results && r.results.some(x => !x.ok); toast(hasErrors ? 'Sync completed with device errors' : 'Sync completed', hasErrors ? 'warning' : 'success'); route(); };
-  $('#timesheetRefresh').onclick = () => {
-    sessionStorage.setItem('polaris_timesheet_date', $('#timesheetDate').value || todayInputValue());
-    route();
-  };
-  $('#timesheetDate').onchange = $('#timesheetRefresh').onclick;
   document.querySelectorAll('.edit-device').forEach(b => b.onclick = () => deviceForm(b.dataset.id));
   document.querySelectorAll('.del-device').forEach(b => b.onclick = async () => { await api(`/api/zkteco/devices/${b.dataset.id}`, { method: 'DELETE' }); toast('Device deleted'); route(); });
 }
