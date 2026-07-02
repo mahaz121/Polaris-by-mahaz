@@ -1,3 +1,5 @@
+const { readJson } = require('../utils/dataStore');
+
 const ALL_PERMISSIONS = [
   'dashboard.view',
   'employees.view',
@@ -34,6 +36,27 @@ function rolePermissions(role = '') {
 function userPermissions(user = {}) {
   const explicit = Array.isArray(user.permissions) ? user.permissions.filter(Boolean) : [];
   return [...new Set([...rolePermissions(user.role), ...explicit])];
+}
+
+async function refreshUserSession(req, res, next) {
+  if (!req.session || !req.session.user || !req.session.user.id) return next();
+  try {
+    const users = await readJson('users.json', []);
+    const user = users.find(item => item.id === req.session.user.id);
+    if (!user || user.active === false) {
+      return req.session.destroy(() => next());
+    }
+    req.session.user = {
+      ...req.session.user,
+      username: user.username,
+      role: user.role,
+      permissions: userPermissions(user),
+      mustChangePassword: !!user.mustChangePassword
+    };
+    return next();
+  } catch (err) {
+    return next(err);
+  }
 }
 
 function hasPermission(user = {}, permission) {
@@ -83,6 +106,7 @@ function requireGuest(req, res, next) {
 }
 module.exports = {
   ALL_PERMISSIONS,
+  refreshUserSession,
   requireAuth,
   requireAdmin,
   requireGuest,

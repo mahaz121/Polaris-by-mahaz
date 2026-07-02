@@ -9,7 +9,7 @@ const cors = require('cors');
 const morgan = require('morgan');
 const { Server } = require('socket.io');
 const { root } = require('./utils/dataStore');
-const { requireAuth, requireAdmin, requirePermission, requireAnyPermission } = require('./middleware/auth');
+const { refreshUserSession, requireAuth, requireAdmin, requirePermission, requireAnyPermission } = require('./middleware/auth');
 const { initSocket } = require('./socket');
 const authRoutes = require('./routes/auth');
 const employeeRoutes = require('./routes/employees');
@@ -41,6 +41,7 @@ const sessionMiddleware = session({
 });
 
 app.use(sessionMiddleware);
+app.use(refreshUserSession);
 
 app.use('/css', express.static(path.join(root, 'public', 'css')));
 app.use('/js', express.static(path.join(root, 'public', 'js')));

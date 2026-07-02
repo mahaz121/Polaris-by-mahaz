@@ -199,9 +199,9 @@ async function load() {
   const can = permission => currentPermissions.includes(permission);
   const [employees, displays, departments, settings, users, devices, companyProfiles] = await Promise.all([
     can('employees.view') || can('employeeStatus.view') || can('employees.manage') || can('displays.manage') || can('dashboard.view') ? api('/api/employees') : Promise.resolve([]),
-    can('displays.manage') || can('dashboard.view') ? api('/api/displays') : Promise.resolve([]),
+    can('displays.manage') ? api('/api/displays') : Promise.resolve([]),
     can('employees.manage') || can('displays.manage') ? api('/api/departments') : Promise.resolve([]),
-    can('weather.manage') || can('dashboard.view') ? api('/api/settings') : Promise.resolve({}),
+    can('weather.manage') ? api('/api/settings') : Promise.resolve({}),
     can('users.manage') ? api('/api/users') : Promise.resolve([]),
     can('zkteco.manage') ? api('/api/zkteco/devices') : Promise.resolve([]),
     can('companyProfiles.manage') ? api('/api/company-profiles') : Promise.resolve([])
