@@ -91,4 +91,4 @@ syncEnabledDevices([], true).catch(console.error);
 setInterval(() => syncEnabledDevices().catch(console.error), 60 * 1000);
 
 const port = Number(process.env.PORT || 3004);
-server.listen(port, () => console.log(`Digital Nameplate server running on port ${port}`));
+server.listen(port, () => console.log(`Polaris server running on port ${port}`));

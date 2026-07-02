@@ -9,7 +9,7 @@ fi
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SOURCE="$1"
-DB_PATH="$APP_DIR/data/nameplate.sqlite"
+DB_PATH="$APP_DIR/data/polaris.sqlite"
 
 if [ ! -f "$SOURCE" ]; then
   echo "Backup file not found: $SOURCE"
@@ -19,7 +19,7 @@ fi
 mkdir -p "$APP_DIR/data" "$APP_DIR/public/uploads"
 
 if command -v pm2 >/dev/null 2>&1; then
-  pm2 stop digital-nameplate >/dev/null 2>&1 || true
+  pm2 stop polaris >/dev/null 2>&1 || true
 fi
 
 restore_database_file() {
@@ -37,7 +37,7 @@ case "$SOURCE" in
     trap 'rm -rf "$TMP_DIR"' EXIT
     tar -xzf "$SOURCE" -C "$TMP_DIR"
 
-    FOUND_DB="$(find "$TMP_DIR" -type f \( -name 'nameplate.sqlite' -o -name '*.sqlite' -o -name '*.db' \) | head -n 1)"
+    FOUND_DB="$(find "$TMP_DIR" -type f \( -name 'polaris.sqlite' -o -name '*.sqlite' -o -name '*.db' \) | head -n 1)"
     if [ -z "$FOUND_DB" ]; then
       echo "No SQLite database file found inside archive."
       exit 1

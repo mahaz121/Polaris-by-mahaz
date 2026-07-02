@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-pm2 stop digital-nameplate
+pm2 stop polaris

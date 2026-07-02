@@ -10,4 +10,4 @@ fi
 
 npm ci --omit=dev
 npm run migrate
-pm2 reload digital-nameplate || pm2 start ecosystem.config.cjs --env production
+pm2 reload polaris || pm2 start ecosystem.config.cjs --env production

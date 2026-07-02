@@ -8,7 +8,7 @@ require('dotenv').config();
 
 const root = path.join(__dirname, '..', '..');
 const dataDir = path.join(root, 'data');
-const dbPath = process.env.SQLITE_PATH || path.join(dataDir, 'nameplate.sqlite');
+const dbPath = process.env.SQLITE_PATH || path.join(dataDir, 'polaris.sqlite');
 
 const defaults = {
   settings: {

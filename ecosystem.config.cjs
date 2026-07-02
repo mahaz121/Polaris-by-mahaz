@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: 'digital-nameplate',
+      name: 'polaris',
       script: 'server/index.js',
       cwd: __dirname,
       instances: 1,

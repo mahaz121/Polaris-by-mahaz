@@ -13,7 +13,7 @@ const linkFor = id => {
   const base = String(configuredBase || location.origin).replace(/\/+$/, '');
   return `${base}/display/${encodeURIComponent(id)}`;
 };
-const displayTableColumnKey = 'nameplate_display_table_columns';
+const displayTableColumnKey = 'polaris_display_table_columns';
 const displayTableColumnOptions = [
   ['lastSeen', 'Last Seen'],
   ['ipAddress', 'IP Address'],

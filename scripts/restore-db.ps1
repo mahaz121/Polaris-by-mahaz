@@ -7,7 +7,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $appDir = Split-Path -Parent $PSScriptRoot
-$dbPath = Join-Path $appDir "data/nameplate.sqlite"
+$dbPath = Join-Path $appDir "data/polaris.sqlite"
 
 if (-not (Test-Path -LiteralPath $Source)) {
   throw "Backup file not found: $Source"
@@ -16,7 +16,7 @@ if (-not (Test-Path -LiteralPath $Source)) {
 New-Item -ItemType Directory -Force -Path (Join-Path $appDir "data"), (Join-Path $appDir "public/uploads") | Out-Null
 
 if (Get-Command pm2 -ErrorAction SilentlyContinue) {
-  pm2 stop digital-nameplate | Out-Null
+  pm2 stop polaris | Out-Null
 }
 
 function Restore-DatabaseFile {
@@ -36,7 +36,7 @@ if ($extension -in @(".sqlite", ".db")) {
   try {
     tar -xzf $Source -C $tempDir
     $database = Get-ChildItem -LiteralPath $tempDir -Recurse -File |
-      Where-Object { $_.Name -eq "nameplate.sqlite" -or $_.Extension -in @(".sqlite", ".db") } |
+      Where-Object { $_.Name -eq "polaris.sqlite" -or $_.Extension -in @(".sqlite", ".db") } |
       Select-Object -First 1
     if (-not $database) {
       throw "No SQLite database file found inside archive."

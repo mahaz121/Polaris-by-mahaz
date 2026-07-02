@@ -11,18 +11,18 @@ mkdir -p "$BACKUP_DIR"
 cd "$APP_DIR"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-if [ ! -f data/nameplate.sqlite ]; then
-  echo "No SQLite database found at data/nameplate.sqlite"
+if [ ! -f data/polaris.sqlite ]; then
+  echo "No SQLite database found at data/polaris.sqlite"
   exit 1
 fi
 
 mkdir -p "$TMP_DIR/data" "$TMP_DIR/public"
-export POLARIS_BACKUP_DB="$TMP_DIR/data/nameplate.sqlite"
+export POLARIS_BACKUP_DB="$TMP_DIR/data/polaris.sqlite"
 node - <<'NODE'
 const path = require('path');
 const Database = require('better-sqlite3');
 
-const source = path.join(process.cwd(), 'data', 'nameplate.sqlite');
+const source = path.join(process.cwd(), 'data', 'polaris.sqlite');
 const target = process.env.POLARIS_BACKUP_DB;
 const db = new Database(source);
 db.pragma('wal_checkpoint(FULL)');
@@ -42,6 +42,6 @@ fi
 
 (
   cd "$TMP_DIR"
-  tar -czf "$ARCHIVE" data/nameplate.sqlite public/uploads .env 2>/dev/null || tar -czf "$ARCHIVE" data/nameplate.sqlite public/uploads
+  tar -czf "$ARCHIVE" data/polaris.sqlite public/uploads .env 2>/dev/null || tar -czf "$ARCHIVE" data/polaris.sqlite public/uploads
 )
 echo "$ARCHIVE"

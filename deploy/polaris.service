@@ -1,16 +1,16 @@
 [Unit]
-Description=Digital Office Nameplate System
+Description=Polaris
 After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/digital-nameplate
+WorkingDirectory=/opt/Polaris-by-mahaz
 ExecStart=/usr/bin/npm start
 Restart=always
 RestartSec=5
 Environment=NODE_ENV=production
 Environment=PORT=3004
-EnvironmentFile=-/opt/digital-nameplate/.env
+EnvironmentFile=-/opt/Polaris-by-mahaz/.env
 
 [Install]
 WantedBy=multi-user.target

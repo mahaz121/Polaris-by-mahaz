@@ -3,7 +3,7 @@
 Author: Riaz Rahman  
 GitHub: https://github.com/mahaz121/
 
-Polaris-by-mahaz is a centralized Digital Office Nameplate System for browser and Raspberry Pi kiosk displays. It uses Node.js, Express, Socket.IO, static HTML/CSS/JavaScript, and SQLite.
+Polaris-by-mahaz is a centralized digital office system for browser and Raspberry Pi kiosk displays. It uses Node.js, Express, Socket.IO, static HTML/CSS/JavaScript, and SQLite.
 
 ## Features
 
@@ -34,7 +34,7 @@ Polaris-by-mahaz/
     settings.json
     users.json
   deploy/
-    digital-nameplate.service
+    polaris.service
   public/
     admin/
     css/
@@ -68,7 +68,7 @@ Copy `.env.example` to `.env` and update values before production use.
 ```env
 PORT=3004
 SESSION_SECRET=replace-with-a-generated-strong-secret
-SQLITE_PATH=./data/nameplate.sqlite
+SQLITE_PATH=./data/polaris.sqlite
 SERVER_PUBLIC_URL=http://your-server-ip:3004
 OPENWEATHER_API_KEY=
 OPENWEATHER_CITY=Riyadh
@@ -180,21 +180,21 @@ The update script runs `git pull --ff-only` when the project is a Git repository
 Copy the included service file and adjust paths if needed:
 
 ```bash
-sudo cp deploy/digital-nameplate.service /etc/systemd/system/digital-nameplate.service
+sudo cp deploy/polaris.service /etc/systemd/system/polaris.service
 sudo systemctl daemon-reload
-sudo systemctl enable digital-nameplate
-sudo systemctl start digital-nameplate
-sudo systemctl status digital-nameplate
+sudo systemctl enable polaris
+sudo systemctl start polaris
+sudo systemctl status polaris
 ```
 
-The service uses port `3004` and reads `/opt/digital-nameplate/.env` when present.
+The service uses port `3004` and reads `/opt/Polaris-by-mahaz/.env` when present.
 
 ## Nginx Example
 
 ```nginx
 server {
   listen 80;
-  server_name nameplate.example.com;
+  server_name polaris.example.com;
 
   location / {
     proxy_pass http://127.0.0.1:3004;
@@ -227,17 +227,17 @@ npm run pm2:restart
 Restore a raw SQLite database copied from another server:
 
 ```bash
-./scripts/restore-db.sh /path/to/nameplate.sqlite
+./scripts/restore-db.sh /path/to/polaris.sqlite
 npm run pm2:restart
 ```
 
 On Windows PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/restore-db.ps1 C:\path\to\nameplate.sqlite
+powershell -ExecutionPolicy Bypass -File scripts/restore-db.ps1 C:\path\to\polaris.sqlite
 ```
 
-Backups include `data/nameplate.sqlite`, `public/uploads`, and `.env` when available. The restore scripts do not restore `.env` by default because server-specific paths and secrets are usually different. Backup archives are ignored by Git.
+Backups include `data/polaris.sqlite`, `public/uploads`, and `.env` when available. The restore scripts do not restore `.env` by default because server-specific paths and secrets are usually different. Backup archives are ignored by Git.
 
 ## Display Setup
 
@@ -275,14 +275,14 @@ The included `.gitignore` already excludes these runtime files.
 - Keep `.env` off GitHub.
 - Restrict `/admin` access to trusted networks or VPN when possible.
 - Put the app behind Nginx for public deployments.
-- Back up `data/nameplate.sqlite` and `public/uploads` before updates.
+- Back up `data/polaris.sqlite` and `public/uploads` before updates.
 - Keep Node.js and npm dependencies patched.
 - Add an OpenWeather API key only in `.env` or the admin settings screen.
 
 ## Troubleshooting
 
 - If port `3004` is busy, stop the conflicting process or update all deployment config consistently.
-- If login fails on a fresh install, remove `data/nameplate.sqlite`, rerun `npm run migrate`, and use the default first-login credentials.
+- If login fails on a fresh install, remove `data/polaris.sqlite`, rerun `npm run migrate`, and use the default first-login credentials.
 - If uploads fail, verify `public/uploads` exists and is writable.
-- If PM2 does not start, run `pm2 logs digital-nameplate`.
+- If PM2 does not start, run `pm2 logs polaris`.
 - If Socket.IO does not connect behind Nginx, verify the `Upgrade` and `Connection` proxy headers.

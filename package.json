@@ -1,7 +1,7 @@
 {
-  "name": "digital-office-nameplate-system",
+  "name": "polaris-by-mahaz",
   "version": "1.0.0",
-  "description": "Centralized Digital Office Nameplate System for Raspberry Pi browser displays",
+  "description": "Polaris centralized digital office system for Raspberry Pi browser displays",
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
@@ -10,10 +10,10 @@
     "build": "node -e \"console.log('No build step required for this static Express app.')\"",
     "production": "npm run migrate && npm start",
     "pm2:start": "pm2 start ecosystem.config.cjs --env production",
-    "pm2:restart": "pm2 reload digital-nameplate || pm2 start ecosystem.config.cjs --env production",
-    "pm2:stop": "pm2 stop digital-nameplate",
-    "pm2:status": "pm2 status digital-nameplate",
-    "pm2:logs": "pm2 logs digital-nameplate",
+    "pm2:restart": "pm2 reload polaris || pm2 start ecosystem.config.cjs --env production",
+    "pm2:stop": "pm2 stop polaris",
+    "pm2:status": "pm2 status polaris",
+    "pm2:logs": "pm2 logs polaris",
     "update": "bash scripts/update.sh"
   },
   "dependencies": {
