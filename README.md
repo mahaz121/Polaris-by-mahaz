@@ -262,18 +262,23 @@ Display and setup URLs require login. For Android FreeKiosk devices, create a no
 Users can be assigned a role preset or one or more access rights:
 
 - `Super Admin`: all access.
+- `Employee Viewer`: can open the Employees page and read employee names/basic details.
+- `Availability Viewer`: can read employee names/basic details and see who is available or not available.
+- `Employee Editor`: can add, edit, and delete employees and departments.
 - `Display` / `Kiosk`: open display and setup pages only.
 - `Custom`: assign one or several rights manually.
 
 Available rights:
 
 - Dashboard
-- Manage Employees
-- Manage Displays
-- Manage Company Profiles
-- Manage Weather
-- Manage ZKTeco
-- Manage Users
+- View Employee Names
+- View Availability Status
+- Edit Employees
+- Add/Edit Displays
+- Edit Company Profiles
+- Edit Weather
+- Manage Fingerprint Devices
+- Create Users & Access Rights
 - Open Displays / Setup
 
 ## ZKTeco Sync

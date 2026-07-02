@@ -9,12 +9,14 @@ let state = { employees: [], displays: [], departments: [], settings: {}, users:
 
 const permissionOptions = [
   ['dashboard.view', 'Dashboard'],
-  ['employees.manage', 'Manage Employees'],
-  ['displays.manage', 'Manage Displays'],
-  ['companyProfiles.manage', 'Manage Company Profiles'],
-  ['weather.manage', 'Manage Weather'],
-  ['zkteco.manage', 'Manage ZKTeco'],
-  ['users.manage', 'Manage Users'],
+  ['employees.view', 'View Employee Names'],
+  ['employeeStatus.view', 'View Availability Status'],
+  ['employees.manage', 'Edit Employees'],
+  ['displays.manage', 'Add/Edit Displays'],
+  ['companyProfiles.manage', 'Edit Company Profiles'],
+  ['weather.manage', 'Edit Weather'],
+  ['zkteco.manage', 'Manage Fingerprint Devices'],
+  ['users.manage', 'Create Users & Access Rights'],
   ['display.access', 'Open Displays / Setup']
 ];
 const allPermissionKeys = permissionOptions.map(([key]) => key);
@@ -23,13 +25,15 @@ const roleDefaults = {
   admin: allPermissionKeys,
   'super admin': allPermissionKeys,
   superadmin: allPermissionKeys,
+  'employee viewer': ['employees.view'],
+  'availability viewer': ['employees.view', 'employeeStatus.view'],
+  'employee editor': ['employees.view', 'employeeStatus.view', 'employees.manage'],
   display: ['display.access'],
-  kiosk: ['display.access'],
-  viewer: ['display.access']
+  kiosk: ['display.access']
 };
 const pagePermissions = {
-  dashboard: 'dashboard.view',
-  employees: 'employees.manage',
+  dashboard: ['dashboard.view'],
+  employees: ['employees.view', 'employeeStatus.view', 'employees.manage'],
   displays: 'displays.manage',
   'company-profiles': 'companyProfiles.manage',
   'company-profile': 'companyProfiles.manage',
@@ -50,9 +54,13 @@ function hasPermission(permission) {
   if (!permission) return !!state.me;
   return permissionsFor(state.me).includes(permission);
 }
+function hasAnyPermission(permissions) {
+  return permissions.some(hasPermission);
+}
 function canOpenPage(page) {
   if (page === 'about-developer') return !!state.me && permissionsFor(state.me).some(permission => permission !== 'display.access');
-  return hasPermission(pagePermissions[page]);
+  const permission = pagePermissions[page];
+  return Array.isArray(permission) ? hasAnyPermission(permission) : hasPermission(permission);
 }
 function firstAllowedPage() {
   return navPageKeys.find(canOpenPage) || '';
@@ -190,7 +198,7 @@ async function load() {
   const currentPermissions = permissionsFor(currentUser);
   const can = permission => currentPermissions.includes(permission);
   const [employees, displays, departments, settings, users, devices, companyProfiles] = await Promise.all([
-    can('employees.manage') || can('displays.manage') || can('dashboard.view') ? api('/api/employees') : Promise.resolve([]),
+    can('employees.view') || can('employeeStatus.view') || can('employees.manage') || can('displays.manage') || can('dashboard.view') ? api('/api/employees') : Promise.resolve([]),
     can('displays.manage') || can('dashboard.view') ? api('/api/displays') : Promise.resolve([]),
     can('employees.manage') || can('displays.manage') ? api('/api/departments') : Promise.resolve([]),
     can('weather.manage') || can('dashboard.view') ? api('/api/settings') : Promise.resolve({}),
@@ -404,37 +412,45 @@ function bindAboutDeveloperActions() {
 
 function employees() {
   setTitle('Employees');
+  const canEditEmployees = hasPermission('employees.manage');
+  const canViewNames = canEditEmployees || hasPermission('employees.view');
+  const canViewStatus = canEditEmployees || hasPermission('employeeStatus.view');
+  const statusHead = canViewStatus ? '<th>Status</th>' : '';
+  const actionHead = canEditEmployees ? '<th></th>' : '';
+  const controls = canEditEmployees ? `
+      <button class="btn btn-outline-primary btn-rounded" id="employeeSettingsBtn"><i class="bi bi-gear"></i> Employee Settings</button>
+      <button class="btn btn-primary btn-rounded" id="addEmployeeBtn"><i class="bi bi-plus-lg"></i> Add</button>` : '';
   content.innerHTML = `
     <div class="d-flex gap-2 mb-3">
       <input id="searchEmp" class="form-control" placeholder="Search employees">
-      <select id="statusFilter" class="form-select w-auto"><option value="">All status</option>${statuses.map(s => `<option>${s}</option>`).join('')}</select>
-      <button class="btn btn-outline-primary btn-rounded" id="employeeSettingsBtn"><i class="bi bi-gear"></i> Employee Settings</button>
-      <button class="btn btn-primary btn-rounded" id="addEmployeeBtn"><i class="bi bi-plus-lg"></i> Add</button>
+      ${canViewStatus ? `<select id="statusFilter" class="form-select w-auto"><option value="">All status</option>${statuses.map(s => `<option>${s}</option>`).join('')}</select>` : ''}
+      ${controls}
     </div>
-    <div class="card table-card"><table class="table table-hover align-middle mb-0"><thead><tr><th>Employee</th><th>Designation</th><th>Department</th><th>Company Email</th><th>Ext.</th><th>Group</th><th>Status</th><th>Display</th><th></th></tr></thead><tbody>
+    <div class="card table-card"><table class="table table-hover align-middle mb-0"><thead><tr><th>Employee</th><th>Designation</th><th>Department</th>${canEditEmployees ? '<th>Company Email</th><th>Ext.</th>' : ''}<th>Group</th>${statusHead}<th>Display</th>${actionHead}</tr></thead><tbody>
       ${state.employees.map(e => `<tr data-status="${esc((e.effectiveStatus && e.effectiveStatus.status) || '')}">
-        <td><div class="d-flex align-items-center gap-2">${avatar(e)}<div><div class="fw-semibold">${esc(e.name)}</div><small class="text-muted">${esc(e.employeeNumber)}</small></div></div></td>
-        <td>${esc(e.designation)}</td>
-        <td>${esc(e.department)}</td>
-        <td>${esc(computedCompanyEmail(e))}</td>
-        <td>${esc(e.extension)}</td>
+        <td><div class="d-flex align-items-center gap-2">${canViewNames ? avatar(e) : ''}<div><div class="fw-semibold">${esc(canViewNames ? e.name : 'Employee')}</div>${canViewNames ? `<small class="text-muted">${esc(e.employeeNumber)}</small>` : ''}</div></div></td>
+        <td>${esc(canViewNames ? e.designation : '')}</td>
+        <td>${esc(canViewNames ? e.department : '')}</td>
+        ${canEditEmployees ? `<td>${esc(computedCompanyEmail(e))}</td><td>${esc(e.extension)}</td>` : ''}
         <td>${esc(e.displayGroup)}</td>
-        <td><span class="badge status-${esc(((e.effectiveStatus && e.effectiveStatus.status) || '').toLowerCase().replace(/\s+/g, '-'))}">${esc((e.effectiveStatus && e.effectiveStatus.status) || 'Not Available')}</span><br><small class="text-muted">${esc((e.effectiveStatus && e.effectiveStatus.source) || '')}</small></td>
+        ${canViewStatus ? `<td><span class="badge status-${esc(((e.effectiveStatus && e.effectiveStatus.status) || '').toLowerCase().replace(/\s+/g, '-'))}">${esc((e.effectiveStatus && e.effectiveStatus.status) || 'Not Available')}</span><br><small class="text-muted">${esc((e.effectiveStatus && e.effectiveStatus.source) || '')}</small></td>` : ''}
         <td>${esc((state.displays.find(d => d.employeeId === e.id) || {}).name || '-')}</td>
-        <td class="text-end"><button class="btn btn-sm btn-outline-primary edit-emp" data-id="${e.id}"><i class="bi bi-pencil"></i></button> <button class="btn btn-sm btn-outline-danger del-emp" data-id="${e.id}"><i class="bi bi-trash"></i></button></td>
+        ${canEditEmployees ? `<td class="text-end"><button class="btn btn-sm btn-outline-primary edit-emp" data-id="${e.id}"><i class="bi bi-pencil"></i></button> <button class="btn btn-sm btn-outline-danger del-emp" data-id="${e.id}"><i class="bi bi-trash"></i></button></td>` : ''}
       </tr>`).join('')}
     </tbody></table></div>`;
-  $('#addEmployeeBtn').onclick = () => employeeForm();
-  $('#employeeSettingsBtn').onclick = () => employeeSettingsModal();
-  document.querySelectorAll('.edit-emp').forEach(b => b.onclick = () => employeeForm(b.dataset.id));
-  document.querySelectorAll('.del-emp').forEach(b => b.onclick = () => deleteEmployee(b.dataset.id));
+  if (canEditEmployees) {
+    $('#addEmployeeBtn').onclick = () => employeeForm();
+    $('#employeeSettingsBtn').onclick = () => employeeSettingsModal();
+    document.querySelectorAll('.edit-emp').forEach(b => b.onclick = () => employeeForm(b.dataset.id));
+    document.querySelectorAll('.del-emp').forEach(b => b.onclick = () => deleteEmployee(b.dataset.id));
+  }
   const filter = () => {
     const q = $('#searchEmp').value.toLowerCase();
-    const s = $('#statusFilter').value;
+    const s = $('#statusFilter') ? $('#statusFilter').value : '';
     document.querySelectorAll('tbody tr').forEach(r => r.style.display = r.textContent.toLowerCase().includes(q) && (!s || r.dataset.status === s) ? '' : 'none');
   };
   $('#searchEmp').oninput = filter;
-  $('#statusFilter').onchange = filter;
+  if ($('#statusFilter')) $('#statusFilter').onchange = filter;
 }
 
 function employeeSettingsModal() {
@@ -1227,14 +1243,14 @@ function userForm(id = '') {
     <input name="password" type="password" class="form-control mb-3" ${id ? '' : 'required'}>
     <label class="form-label">Role</label>
     <select name="role" class="form-select mb-3">
-      ${['Super Admin', 'Custom', 'Display', 'Kiosk'].map(role => `<option value="${esc(role)}" ${String(u.role || '').toLowerCase() === role.toLowerCase() ? 'selected' : ''}>${esc(role)}</option>`).join('')}
+      ${['Super Admin', 'Employee Viewer', 'Availability Viewer', 'Employee Editor', 'Display', 'Kiosk', 'Custom'].map(role => `<option value="${esc(role)}" ${String(u.role || '').toLowerCase() === role.toLowerCase() ? 'selected' : ''}>${esc(role)}</option>`).join('')}
     </select>
     <div class="mb-3">
       <label class="form-label">Access Rights</label>
       <div class="row g-2">
         ${permissionOptions.map(([key, label]) => `<div class="col-md-6"><label class="form-check border rounded px-3 py-2 h-100"><input class="form-check-input user-permission me-2" type="checkbox" value="${esc(key)}" ${selected.has(key) ? 'checked' : ''}>${esc(label)}</label></div>`).join('')}
       </div>
-      <div class="form-text">Super Admin grants all access. Display/Kiosk users only need Open Displays / Setup.</div>
+      <div class="form-text">Choose a role as a shortcut, then tick one or many access rights as needed.</div>
     </div>
     <div class="form-check mb-3"><input class="form-check-input" name="active" type="checkbox" ${u.active ? 'checked' : ''}><label class="form-check-label">Active</label></div>
     <button class="btn btn-primary">Save</button>

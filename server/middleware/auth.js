@@ -1,5 +1,7 @@
 const ALL_PERMISSIONS = [
   'dashboard.view',
+  'employees.view',
+  'employeeStatus.view',
   'employees.manage',
   'displays.manage',
   'companyProfiles.manage',
@@ -22,6 +24,9 @@ function isDisplayRole(user = {}) {
 function rolePermissions(role = '') {
   const normalized = String(role || '').trim().toLowerCase();
   if (['administrator', 'admin', 'super admin', 'superadmin'].includes(normalized)) return ALL_PERMISSIONS;
+  if (normalized === 'employee viewer') return ['employees.view'];
+  if (normalized === 'availability viewer') return ['employees.view', 'employeeStatus.view'];
+  if (normalized === 'employee editor') return ['employees.view', 'employeeStatus.view', 'employees.manage'];
   if (['display', 'kiosk', 'viewer'].includes(normalized)) return ['display.access'];
   return [];
 }
@@ -33,6 +38,10 @@ function userPermissions(user = {}) {
 
 function hasPermission(user = {}, permission) {
   return userPermissions(user).includes(permission);
+}
+
+function hasAnyPermission(user = {}, permissions = []) {
+  return permissions.some(permission => hasPermission(user, permission));
 }
 
 function hasAnyAdminPermission(user = {}) {
@@ -58,6 +67,16 @@ function requirePermission(permission) {
   };
 }
 
+function requireAnyPermission(permissions) {
+  return (req, res, next) => {
+    if (!req.session || !req.session.user) return requireAuth(req, res, next);
+    if (!hasAnyPermission(req.session.user, permissions)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    return next();
+  };
+}
+
 function requireGuest(req, res, next) {
   if (req.session && req.session.user) return res.redirect('/admin/');
   return next();
@@ -68,8 +87,10 @@ module.exports = {
   requireAdmin,
   requireGuest,
   requirePermission,
+  requireAnyPermission,
   isDisplayRole,
   userPermissions,
   hasPermission,
+  hasAnyPermission,
   hasAnyAdminPermission
 };

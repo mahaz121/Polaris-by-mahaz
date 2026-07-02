@@ -6,6 +6,8 @@ const router = express.Router();
 
 const validPermissions = new Set([
   'dashboard.view',
+  'employees.view',
+  'employeeStatus.view',
   'employees.manage',
   'displays.manage',
   'companyProfiles.manage',

@@ -6,6 +6,7 @@ const { readJson, writeJson, root } = require('../utils/dataStore');
 const { emitAllDisplays, emitAdminStats } = require('../socket');
 const { db, nowIso } = require('../utils/database');
 const { STATUSES, normalizeStatus, effectiveEmployeeStatus } = require('../utils/status');
+const { hasPermission } = require('../middleware/auth');
 const router = express.Router();
 
 const upload = multer({ storage: multer.diskStorage({
@@ -49,13 +50,29 @@ function normalize(body, file, existing = {}) {
 
 router.get('/', async (req, res) => {
   const q = String(req.query.q || '').toLowerCase();
-  const employees = (await readJson('employees.json', [])).map(e => ({ ...e, effectiveStatus: effectiveEmployeeStatus(e) }));
+  const canManage = hasPermission(req.session.user, 'employees.manage') || hasPermission(req.session.user, 'displays.manage') || hasPermission(req.session.user, 'dashboard.view');
+  const canViewNames = canManage || hasPermission(req.session.user, 'employees.view');
+  const canViewStatus = canManage || hasPermission(req.session.user, 'employeeStatus.view');
+  const employees = (await readJson('employees.json', [])).map(e => {
+    const effectiveStatus = effectiveEmployeeStatus(e);
+    if (canManage) return { ...e, effectiveStatus };
+    return {
+      id: e.id,
+      employeeNumber: canViewNames ? e.employeeNumber : '',
+      name: canViewNames ? e.name : '',
+      designation: canViewNames ? e.designation : '',
+      department: canViewNames ? e.department : '',
+      displayGroup: canViewNames ? e.displayGroup : '',
+      status: e.status,
+      effectiveStatus: canViewStatus ? effectiveStatus : null
+    };
+  });
   res.json(q ? employees.filter(e => JSON.stringify(e).toLowerCase().includes(q)) : employees);
 });
 
 router.get('/statuses', (req, res) => res.json(STATUSES));
 
-router.post('/', upload.single('photo'), async (req, res) => {
+router.post('/', (req, res, next) => hasPermission(req.session.user, 'employees.manage') ? next() : res.status(403).json({ error: 'Access denied' }), upload.single('photo'), async (req, res) => {
   const employees = await readJson('employees.json', []);
   const employee = { id: randomUUID(), ...normalize(req.body, req.file), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
   employees.push(employee);
@@ -65,7 +82,7 @@ router.post('/', upload.single('photo'), async (req, res) => {
   res.status(201).json(employee);
 });
 
-router.put('/:id', upload.single('photo'), async (req, res) => {
+router.put('/:id', (req, res, next) => hasPermission(req.session.user, 'employees.manage') ? next() : res.status(403).json({ error: 'Access denied' }), upload.single('photo'), async (req, res) => {
   const employees = await readJson('employees.json', []);
   const idx = employees.findIndex(e => e.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Employee not found' });
@@ -76,7 +93,7 @@ router.put('/:id', upload.single('photo'), async (req, res) => {
   res.json(employees[idx]);
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', (req, res, next) => hasPermission(req.session.user, 'employees.manage') ? next() : res.status(403).json({ error: 'Access denied' }), async (req, res) => {
   let employees = await readJson('employees.json', []);
   employees = employees.filter(e => e.id !== req.params.id);
   let displays = await readJson('displays.json', []);
@@ -88,7 +105,7 @@ router.delete('/:id', async (req, res) => {
   res.json({ ok: true });
 });
 
-router.post('/:id/override', async (req, res) => {
+router.post('/:id/override', (req, res, next) => hasPermission(req.session.user, 'employees.manage') ? next() : res.status(403).json({ error: 'Access denied' }), async (req, res) => {
   const employees = await readJson('employees.json', []);
   const employee = employees.find(e => e.id === req.params.id);
   if (!employee) return res.status(404).json({ error: 'Employee not found' });
@@ -113,7 +130,7 @@ router.post('/:id/override', async (req, res) => {
   res.status(201).json({ id, employeeId: employee.id, status, startAt: req.body.startAt || nowIso(), endAt: req.body.endAt || '', note: req.body.note || '' });
 });
 
-router.delete('/:id/override', async (req, res) => {
+router.delete('/:id/override', (req, res, next) => hasPermission(req.session.user, 'employees.manage') ? next() : res.status(403).json({ error: 'Access denied' }), async (req, res) => {
   db.prepare('DELETE FROM employee_status_overrides WHERE employee_id = ?').run(req.params.id);
   await emitAllDisplays();
   await emitAdminStats();

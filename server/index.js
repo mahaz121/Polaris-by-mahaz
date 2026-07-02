@@ -9,7 +9,7 @@ const cors = require('cors');
 const morgan = require('morgan');
 const { Server } = require('socket.io');
 const { root } = require('./utils/dataStore');
-const { requireAuth, requireAdmin, requirePermission } = require('./middleware/auth');
+const { requireAuth, requireAdmin, requirePermission, requireAnyPermission } = require('./middleware/auth');
 const { initSocket } = require('./socket');
 const authRoutes = require('./routes/auth');
 const employeeRoutes = require('./routes/employees');
@@ -72,7 +72,7 @@ app.get('/api/setup/displays', requirePermission('display.access'), async (req, 
   const displays = await readJson('displays.json', []);
   res.json(displays.map(d => ({ id: d.id, name: d.name })));
 });
-app.use('/api/employees', requirePermission('employees.manage'), employeeRoutes);
+app.use('/api/employees', requireAnyPermission(['employees.view', 'employeeStatus.view', 'employees.manage', 'displays.manage', 'dashboard.view']), employeeRoutes);
 app.use('/api/departments', requirePermission('employees.manage'), departmentRoutes);
 app.use('/api/displays', requirePermission('displays.manage'), displayRoutes);
 app.use('/api/settings', requirePermission('weather.manage'), settingsRoutes);
