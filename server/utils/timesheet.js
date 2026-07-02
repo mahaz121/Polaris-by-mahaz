@@ -1,0 +1,143 @@
+const { db } = require('./database');
+const { effectiveEmployeeStatus } = require('./status');
+
+const DEFAULT_WORK_START = process.env.WORK_DAY_START || '08:00';
+const DEFAULT_WORK_END = process.env.WORK_DAY_END || '17:00';
+
+function pad(value) {
+  return String(value).padStart(2, '0');
+}
+
+function todayString() {
+  const now = new Date();
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+function parseDateInput(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || '')) ? String(value) : todayString();
+}
+
+function localDateTime(date, time) {
+  return new Date(`${date}T${time || '00:00'}:00`);
+}
+
+function formatDuration(ms) {
+  const minutes = Math.max(0, Math.round(ms / 60000));
+  const hours = Math.floor(minutes / 60);
+  const remaining = minutes % 60;
+  return `${hours}h ${remaining}m`;
+}
+
+function overlaps(start, end, windowStart, windowEnd) {
+  return Math.max(0, Math.min(end.getTime(), windowEnd.getTime()) - Math.max(start.getTime(), windowStart.getTime()));
+}
+
+function punchDirection(log, index) {
+  const raw = String(log.punch_type || '').toLowerCase();
+  if (/check.?in|\bin\b|^0$/.test(raw)) return 'in';
+  if (/check.?out|\bout\b|^1$/.test(raw)) return 'out';
+  return index % 2 === 0 ? 'in' : 'out';
+}
+
+function buildSegments(logs, dayEnd = new Date()) {
+  const segments = [];
+  let openStart = null;
+  logs.forEach((log, index) => {
+    const at = new Date(log.punch_time);
+    if (Number.isNaN(at.getTime())) return;
+    const direction = punchDirection(log, index);
+    if (direction === 'in') {
+      if (!openStart) openStart = at;
+      return;
+    }
+    if (openStart && at > openStart) {
+      segments.push({ start: openStart, end: at });
+      openStart = null;
+    }
+  });
+  if (openStart) segments.push({ start: openStart, end: dayEnd, open: true });
+  return segments;
+}
+
+function dailyTimesheet({ date, workStart = DEFAULT_WORK_START, workEnd = DEFAULT_WORK_END } = {}) {
+  const day = parseDateInput(date);
+  const dayStart = localDateTime(day, '00:00');
+  const dayEnd = localDateTime(day, '23:59');
+  const workStartAt = localDateTime(day, workStart);
+  const workEndAt = localDateTime(day, workEnd);
+  const employees = db.prepare(`
+    SELECT id, employee_number, name, department, designation, status
+    FROM employees
+    WHERE status != 'Inactive'
+    ORDER BY name COLLATE NOCASE
+  `).all();
+  const logs = db.prepare(`
+    SELECT employee_number, device_id, punch_time, punch_type
+    FROM attendance_logs
+    WHERE punch_time >= ? AND punch_time <= ?
+    ORDER BY employee_number COLLATE NOCASE, punch_time ASC
+  `).all(dayStart.toISOString(), dayEnd.toISOString());
+  const byEmployee = new Map();
+  logs.forEach(log => {
+    if (!byEmployee.has(log.employee_number)) byEmployee.set(log.employee_number, []);
+    byEmployee.get(log.employee_number).push(log);
+  });
+
+  const openSegmentEnd = new Date(Math.min(Date.now(), dayEnd.getTime()));
+  const rows = employees.map(employee => {
+    const employeeLogs = byEmployee.get(employee.employee_number || '') || [];
+    const segments = buildSegments(employeeLogs, openSegmentEnd);
+    const insideMs = segments.reduce((sum, segment) => sum + Math.max(0, segment.end - segment.start), 0);
+    const insideDuringWorkMs = segments.reduce((sum, segment) => sum + overlaps(segment.start, segment.end, workStartAt, workEndAt), 0);
+    const workMs = Math.max(0, workEndAt - workStartAt);
+    const outsideDuringWorkMs = Math.max(0, workMs - insideDuringWorkMs);
+    const firstIn = employeeLogs.find((log, index) => punchDirection(log, index) === 'in');
+    const lastOut = [...employeeLogs].reverse().find((log, index, reversed) => {
+      const originalIndex = employeeLogs.length - 1 - index;
+      return punchDirection(log, originalIndex) === 'out';
+    });
+    const hasOpenSegment = segments.some(segment => segment.open);
+    return {
+      employeeId: employee.id,
+      employeeNumber: employee.employee_number || '',
+      name: employee.name || '',
+      department: employee.department || '',
+      designation: employee.designation || '',
+      firstIn: firstIn?.punch_time || '',
+      lastOut: lastOut?.punch_time || '',
+      punchCount: employeeLogs.length,
+      insideMinutes: Math.round(insideMs / 60000),
+      inside: formatDuration(insideMs),
+      insideDuringWorkMinutes: Math.round(insideDuringWorkMs / 60000),
+      insideDuringWork: formatDuration(insideDuringWorkMs),
+      outsideDuringWorkMinutes: Math.round(outsideDuringWorkMs / 60000),
+      outsideDuringWork: formatDuration(outsideDuringWorkMs),
+      status: hasOpenSegment ? 'Inside now' : (employeeLogs.length ? 'Checked out' : 'No punches'),
+      liveStatus: effectiveEmployeeStatus({ ...employee, employeeNumber: employee.employee_number }).status
+    };
+  });
+
+  const totals = rows.reduce((acc, row) => {
+    acc.insideMinutes += row.insideMinutes;
+    acc.insideDuringWorkMinutes += row.insideDuringWorkMinutes;
+    acc.outsideDuringWorkMinutes += row.outsideDuringWorkMinutes;
+    if (row.status === 'Inside now') acc.insideNow += 1;
+    if (row.punchCount) acc.withPunches += 1;
+    return acc;
+  }, { insideMinutes: 0, insideDuringWorkMinutes: 0, outsideDuringWorkMinutes: 0, insideNow: 0, withPunches: 0 });
+
+  return {
+    date: day,
+    workStart,
+    workEnd,
+    totals: {
+      ...totals,
+      inside: formatDuration(totals.insideMinutes * 60000),
+      insideDuringWork: formatDuration(totals.insideDuringWorkMinutes * 60000),
+      outsideDuringWork: formatDuration(totals.outsideDuringWorkMinutes * 60000)
+    },
+    rows
+  };
+}
+
+module.exports = { dailyTimesheet, todayString };

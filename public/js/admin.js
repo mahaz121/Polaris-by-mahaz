@@ -5,7 +5,7 @@ const modal = new bootstrap.Modal(modalEl);
 const socket = io();
 
 const statuses = ['Available', 'Not Available'];
-let state = { employees: [], displays: [], departments: [], settings: {}, users: [], devices: [], companyProfiles: [], dashboard: null, me: null };
+let state = { employees: [], displays: [], departments: [], settings: {}, users: [], devices: [], timesheet: null, companyProfiles: [], dashboard: null, me: null };
 
 const permissionOptions = [
   ['dashboard.view', 'Dashboard'],
@@ -194,13 +194,25 @@ function formObject(form) {
   return data;
 }
 
+function localDateTime(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString();
+}
+
+function todayInputValue() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
 async function load() {
   const me = await api('/api/auth/me');
   const currentUser = (me && me.user) || null;
   state.me = currentUser;
   const currentPermissions = permissionsFor(currentUser);
   const can = permission => currentPermissions.includes(permission);
-  const [dashboardData, employees, displays, departments, settings, users, devices, companyProfiles] = await Promise.all([
+  const timesheetDate = sessionStorage.getItem('polaris_timesheet_date') || new Date().toISOString().slice(0, 10);
+  const [dashboardData, employees, displays, departments, settings, users, devices, timesheet, companyProfiles] = await Promise.all([
     can('dashboard.view') ? api('/api/dashboard') : Promise.resolve(null),
     can('employees.view') || can('employeeStatus.view') || can('employees.manage') || can('displays.manage') ? api('/api/employees') : Promise.resolve([]),
     can('displays.manage') ? api('/api/displays') : Promise.resolve([]),
@@ -208,6 +220,7 @@ async function load() {
     can('weather.manage') ? api('/api/settings') : Promise.resolve({}),
     can('users.manage') ? api('/api/users') : Promise.resolve([]),
     can('zkteco.manage') ? api('/api/zkteco/devices') : Promise.resolve([]),
+    can('zkteco.manage') ? api(`/api/zkteco/timesheet?date=${encodeURIComponent(timesheetDate)}`) : Promise.resolve(null),
     can('companyProfiles.manage') ? api('/api/company-profiles') : Promise.resolve([])
   ]);
   state = {
@@ -217,6 +230,7 @@ async function load() {
     settings: settings || {},
     users: Array.isArray(users) ? users : [],
     devices: Array.isArray(devices) ? devices : [],
+    timesheet: timesheet || null,
     companyProfiles: Array.isArray(companyProfiles) ? companyProfiles : [],
     dashboard: dashboardData || null,
     me: currentUser
@@ -1217,9 +1231,39 @@ async function weather() {
 }
 function zkteco() {
   setTitle('ZKTeco');
-  content.innerHTML = `<button class="btn btn-primary btn-rounded mb-3" id="addDeviceBtn"><i class="bi bi-plus-lg"></i> Add Device</button> <button class="btn btn-outline-secondary btn-rounded mb-3" id="syncBtn"><i class="bi bi-arrow-repeat"></i> Sync Now</button><div class="card table-card"><table class="table mb-0"><thead><tr><th>Name</th><th>IP</th><th>Port</th><th>Enabled</th><th>Interval</th><th>Last Sync</th><th>Error</th><th></th></tr></thead><tbody>${state.devices.map(d => `<tr><td>${esc(d.name)}</td><td>${esc(d.ip)}</td><td>${esc(d.port)}</td><td>${d.enabled ? 'Yes' : 'No'}</td><td>${esc(d.pollingInterval)}s</td><td>${esc(d.lastSyncAt || '')}</td><td>${esc(d.lastError || '')}</td><td class="text-end"><button class="btn btn-sm btn-outline-primary edit-device" data-id="${d.id}"><i class="bi bi-pencil"></i></button> <button class="btn btn-sm btn-outline-danger del-device" data-id="${d.id}"><i class="bi bi-trash"></i></button></td></tr>`).join('')}</tbody></table></div>`;
+  const timesheet = state.timesheet || { rows: [], totals: {}, date: todayInputValue(), workStart: '08:00', workEnd: '17:00' };
+  content.innerHTML = `
+    <div class="d-flex gap-2 mb-3 flex-wrap">
+      <button class="btn btn-primary btn-rounded" id="addDeviceBtn"><i class="bi bi-plus-lg"></i> Add Device</button>
+      <button class="btn btn-outline-secondary btn-rounded" id="syncBtn"><i class="bi bi-arrow-repeat"></i> Sync Now</button>
+    </div>
+    <div class="card table-card mb-4"><table class="table mb-0"><thead><tr><th>Name</th><th>IP</th><th>Port</th><th>Enabled</th><th>Interval</th><th>Last Sync</th><th>Error</th><th></th></tr></thead><tbody>${state.devices.map(d => `<tr><td>${esc(d.name)}</td><td>${esc(d.ip)}</td><td>${esc(d.port)}</td><td>${d.enabled ? 'Yes' : 'No'}</td><td>${esc(d.pollingInterval)}s</td><td>${esc(d.lastSyncAt || '')}</td><td>${esc(d.lastError || '')}</td><td class="text-end"><button class="btn btn-sm btn-outline-primary edit-device" data-id="${d.id}"><i class="bi bi-pencil"></i></button> <button class="btn btn-sm btn-outline-danger del-device" data-id="${d.id}"><i class="bi bi-trash"></i></button></td></tr>`).join('')}</tbody></table></div>
+    <div class="d-flex align-items-end justify-content-between gap-3 flex-wrap mb-3">
+      <div>
+        <h3 class="h5 mb-1">Daily Timesheet</h3>
+        <div class="text-muted small">Inside/outside hours are calculated from fingerprint punches during working hours ${esc(timesheet.workStart)} - ${esc(timesheet.workEnd)}.</div>
+      </div>
+      <div class="d-flex gap-2 align-items-end">
+        <div><label class="form-label small">Date</label><input id="timesheetDate" class="form-control" type="date" value="${esc(timesheet.date || todayInputValue())}"></div>
+        <button class="btn btn-outline-primary" id="timesheetRefresh"><i class="bi bi-arrow-clockwise"></i></button>
+      </div>
+    </div>
+    <section class="dashboard-kpis mb-3">
+      <article class="dashboard-kpi"><div class="dashboard-kpi-icon"><i class="bi bi-person-check"></i></div><div><span>Inside Now</span><strong>${esc(timesheet.totals.insideNow || 0)}</strong><small>${esc(timesheet.totals.withPunches || 0)} employees with punches</small></div></article>
+      <article class="dashboard-kpi"><div class="dashboard-kpi-icon"><i class="bi bi-clock-history"></i></div><div><span>Total Inside</span><strong>${esc(timesheet.totals.inside || '0h 0m')}</strong><small>All employees</small></div></article>
+      <article class="dashboard-kpi"><div class="dashboard-kpi-icon"><i class="bi bi-building-check"></i></div><div><span>Inside Work Hours</span><strong>${esc(timesheet.totals.insideDuringWork || '0h 0m')}</strong><small>Within schedule</small></div></article>
+      <article class="dashboard-kpi"><div class="dashboard-kpi-icon"><i class="bi bi-door-open"></i></div><div><span>Outside Work Hours</span><strong>${esc(timesheet.totals.outsideDuringWork || '0h 0m')}</strong><small>Within schedule</small></div></article>
+    </section>
+    <div class="card table-card"><table class="table table-hover align-middle mb-0"><thead><tr><th>Employee</th><th>Department</th><th>First In</th><th>Last Out</th><th>Inside</th><th>Outside Work Hours</th><th>Punches</th><th>Status</th></tr></thead><tbody>
+      ${timesheet.rows.map(row => `<tr><td><strong>${esc(row.name)}</strong><br><small class="text-muted">${esc(row.employeeNumber)}</small></td><td>${esc(row.department || '-')}</td><td>${esc(localDateTime(row.firstIn))}</td><td>${esc(localDateTime(row.lastOut))}</td><td>${esc(row.inside || '0h 0m')}</td><td>${esc(row.outsideDuringWork || '0h 0m')}</td><td>${esc(row.punchCount || 0)}</td><td><span class="badge ${row.status === 'Inside now' ? 'bg-success' : row.status === 'No punches' ? 'bg-secondary' : 'bg-primary'}">${esc(row.status)}</span><br><small class="text-muted">${esc(row.liveStatus || '')}</small></td></tr>`).join('')}
+    </tbody></table></div>`;
   $('#addDeviceBtn').onclick = () => deviceForm();
   $('#syncBtn').onclick = async () => { const r = await api('/api/zkteco/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); const hasErrors = r.results && r.results.some(x => !x.ok); toast(hasErrors ? 'Sync completed with device errors' : 'Sync completed', hasErrors ? 'warning' : 'success'); route(); };
+  $('#timesheetRefresh').onclick = () => {
+    sessionStorage.setItem('polaris_timesheet_date', $('#timesheetDate').value || todayInputValue());
+    route();
+  };
+  $('#timesheetDate').onchange = $('#timesheetRefresh').onclick;
   document.querySelectorAll('.edit-device').forEach(b => b.onclick = () => deviceForm(b.dataset.id));
   document.querySelectorAll('.del-device').forEach(b => b.onclick = async () => { await api(`/api/zkteco/devices/${b.dataset.id}`, { method: 'DELETE' }); toast('Device deleted'); route(); });
 }

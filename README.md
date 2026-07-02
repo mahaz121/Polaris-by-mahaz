@@ -388,11 +388,15 @@ Enabled ZKTeco devices are synced automatically every `ZKTECO_SYNC_INTERVAL_SECO
 ```env
 ZKTECO_SYNC_INTERVAL_SECONDS=60
 PRESENCE_WINDOW_HOURS=18
+WORK_DAY_START=08:00
+WORK_DAY_END=17:00
 ```
 
 Device host values may be entered as an IP address, hostname, `host:port`, or TCP-style endpoint. ZKTeco uses a raw TCP connection, so HTTP/HTTPS ngrok URLs do not work. For ngrok, use a TCP tunnel host and port, for example `0.tcp.ngrok.io` with the assigned TCP port.
 
 Employee availability depends on attendance punch logs inside the presence window. Fingerprint enrollment alone does not mark an employee as `Available`; the employee number in Polaris must match the ZKTeco user ID/PIN that appears in attendance logs.
+
+The ZKTeco page includes a daily timesheet. Polaris treats check-in punches as inside/available and check-out punches as outside/not available. When the device sends no explicit punch type, Polaris pairs punches in order as in/out/in/out. The daily report shows first in, last out, total inside time, outside time during working hours, current inside status, and punch count.
 
 ## GitHub Readiness
 

@@ -4,6 +4,7 @@ const ZKLib = require('zklib-js');
 const { readJson, writeJson } = require('../utils/dataStore');
 const { db, nowIso } = require('../utils/database');
 const { insertAttendanceLog } = require('../utils/status');
+const { dailyTimesheet, todayString } = require('../utils/timesheet');
 const { emitAllDisplays, emitAdminStats } = require('../socket');
 
 const router = express.Router();
@@ -165,6 +166,14 @@ router.get('/logs', (req, res) => {
     LIMIT 200
   `).all();
   res.json(rows);
+});
+
+router.get('/timesheet', (req, res) => {
+  res.json(dailyTimesheet({
+    date: req.query.date || todayString(),
+    workStart: req.query.workStart || process.env.WORK_DAY_START || '08:00',
+    workEnd: req.query.workEnd || process.env.WORK_DAY_END || '17:00'
+  }));
 });
 
 async function syncEnabledDevices(extraLogs = [], force = false) {
