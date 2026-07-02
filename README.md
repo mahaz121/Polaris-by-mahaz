@@ -224,7 +224,20 @@ Restore a backup:
 npm run pm2:restart
 ```
 
-Backups include `data/nameplate.sqlite`, `public/uploads`, and `.env` when available. Backup archives are ignored by Git.
+Restore a raw SQLite database copied from another server:
+
+```bash
+./scripts/restore-db.sh /path/to/nameplate.sqlite
+npm run pm2:restart
+```
+
+On Windows PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/restore-db.ps1 C:\path\to\nameplate.sqlite
+```
+
+Backups include `data/nameplate.sqlite`, `public/uploads`, and `.env` when available. The restore scripts do not restore `.env` by default because server-specific paths and secrets are usually different. Backup archives are ignored by Git.
 
 ## Display Setup
 
