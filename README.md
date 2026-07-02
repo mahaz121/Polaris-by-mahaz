@@ -71,7 +71,7 @@ SESSION_SECRET=replace-with-a-generated-strong-secret
 SQLITE_PATH=./data/polaris.sqlite
 SERVER_PUBLIC_URL=http://your-server-ip:3004
 OPENWEATHER_API_KEY=
-OPENWEATHER_CITY=Riyadh
+OPENWEATHER_CITY=YourCity
 OPENWEATHER_UNITS=metric
 OPENWEATHER_LANG=en
 ```
