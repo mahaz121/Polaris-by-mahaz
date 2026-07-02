@@ -9,6 +9,12 @@ function isDisplayRole(user = {}) {
   return ['display', 'kiosk', 'viewer'].includes(String(user.role || '').trim().toLowerCase());
 }
 
+function hasAdminSocketAccess(user = {}) {
+  const role = String(user.role || '').trim().toLowerCase();
+  if (['administrator', 'admin', 'super admin', 'superadmin'].includes(role)) return true;
+  return Array.isArray(user.permissions) && user.permissions.some(permission => permission !== 'display.access');
+}
+
 async function buildPayload(displayId) {
   return buildDisplayPayload(displayId);
 }
@@ -52,7 +58,7 @@ function initSocket(io, sessionMiddleware) {
 
     socket.on('admin-watch', () => {
       const user = socket.request.session && socket.request.session.user;
-      if (user && !isDisplayRole(user)) socket.join('admins');
+      if (user && hasAdminSocketAccess(user)) socket.join('admins');
     });
 
     socket.on('disconnect', async () => {

@@ -7,7 +7,62 @@ const socket = io();
 const statuses = ['Available', 'Not Available'];
 let state = { employees: [], displays: [], departments: [], settings: {}, users: [], devices: [], companyProfiles: [], me: null };
 
+const permissionOptions = [
+  ['dashboard.view', 'Dashboard'],
+  ['employees.manage', 'Manage Employees'],
+  ['displays.manage', 'Manage Displays'],
+  ['companyProfiles.manage', 'Manage Company Profiles'],
+  ['weather.manage', 'Manage Weather'],
+  ['zkteco.manage', 'Manage ZKTeco'],
+  ['users.manage', 'Manage Users'],
+  ['display.access', 'Open Displays / Setup']
+];
+const allPermissionKeys = permissionOptions.map(([key]) => key);
+const roleDefaults = {
+  administrator: allPermissionKeys,
+  admin: allPermissionKeys,
+  'super admin': allPermissionKeys,
+  superadmin: allPermissionKeys,
+  display: ['display.access'],
+  kiosk: ['display.access'],
+  viewer: ['display.access']
+};
+const pagePermissions = {
+  dashboard: 'dashboard.view',
+  employees: 'employees.manage',
+  displays: 'displays.manage',
+  'company-profiles': 'companyProfiles.manage',
+  'company-profile': 'companyProfiles.manage',
+  weather: 'weather.manage',
+  zkteco: 'zkteco.manage',
+  users: 'users.manage',
+  'about-developer': null
+};
+const navPageKeys = ['dashboard', 'employees', 'displays', 'company-profiles', 'weather', 'zkteco', 'users', 'about-developer'];
+
 const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function permissionsFor(user = {}) {
+  const role = String(user.role || '').trim().toLowerCase();
+  const explicit = Array.isArray(user.permissions) ? user.permissions.filter(Boolean) : [];
+  return [...new Set([...(roleDefaults[role] || []), ...explicit])];
+}
+function hasPermission(permission) {
+  if (!permission) return !!state.me;
+  return permissionsFor(state.me).includes(permission);
+}
+function canOpenPage(page) {
+  if (page === 'about-developer') return !!state.me && permissionsFor(state.me).some(permission => permission !== 'display.access');
+  return hasPermission(pagePermissions[page]);
+}
+function firstAllowedPage() {
+  return navPageKeys.find(canOpenPage) || '';
+}
+function applyNavigation() {
+  document.querySelectorAll('.nav-link').forEach(link => {
+    const page = (link.hash || '').replace('#', '');
+    link.hidden = !canOpenPage(page);
+  });
+}
 const linkFor = id => {
   const configuredBase = state.settings.publicBaseUrl || state.settings.baseUrl || state.settings.ui?.publicBaseUrl || state.settings.ui?.baseUrl || '';
   const base = String(configuredBase || location.origin).replace(/\/+$/, '');
@@ -129,15 +184,19 @@ function formObject(form) {
 }
 
 async function load() {
-  const [employees, displays, departments, settings, users, me, devices, companyProfiles] = await Promise.all([
-    api('/api/employees'),
-    api('/api/displays'),
-    api('/api/departments'),
-    api('/api/settings'),
-    api('/api/users'),
-    api('/api/auth/me'),
-    api('/api/zkteco/devices'),
-    api('/api/company-profiles')
+  const me = await api('/api/auth/me');
+  const currentUser = (me && me.user) || null;
+  state.me = currentUser;
+  const currentPermissions = permissionsFor(currentUser);
+  const can = permission => currentPermissions.includes(permission);
+  const [employees, displays, departments, settings, users, devices, companyProfiles] = await Promise.all([
+    can('employees.manage') || can('displays.manage') || can('dashboard.view') ? api('/api/employees') : Promise.resolve([]),
+    can('displays.manage') || can('dashboard.view') ? api('/api/displays') : Promise.resolve([]),
+    can('employees.manage') || can('displays.manage') ? api('/api/departments') : Promise.resolve([]),
+    can('weather.manage') || can('dashboard.view') ? api('/api/settings') : Promise.resolve({}),
+    can('users.manage') ? api('/api/users') : Promise.resolve([]),
+    can('zkteco.manage') ? api('/api/zkteco/devices') : Promise.resolve([]),
+    can('companyProfiles.manage') ? api('/api/company-profiles') : Promise.resolve([])
   ]);
   state = {
     employees: Array.isArray(employees) ? employees : [],
@@ -147,7 +206,7 @@ async function load() {
     users: Array.isArray(users) ? users : [],
     devices: Array.isArray(devices) ? devices : [],
     companyProfiles: Array.isArray(companyProfiles) ? companyProfiles : [],
-    me: (me && me.user) || null
+    me: currentUser
   };
   state.settings.company = state.settings.company || {};
   state.settings.weather = state.settings.weather || {};
@@ -162,8 +221,18 @@ function setTitle(title) {
 async function route() {
   try {
     await load();
+    applyNavigation();
     if (state.me && state.me.mustChangePassword) passwordChangeForm(true);
-    const page = (location.hash || '#dashboard').slice(1);
+    let page = (location.hash || '#dashboard').slice(1);
+    if (!canOpenPage(page)) {
+      const fallback = firstAllowedPage();
+      if (!fallback) {
+        content.innerHTML = '<div class="alert alert-warning">No admin access rights assigned to this user.</div>';
+        return;
+      }
+      location.hash = fallback;
+      page = fallback;
+    }
     document.body.dataset.adminPage = page;
     ({ dashboard, employees, displays, 'company-profiles': renderCompanyProfiles, 'company-profile': renderCompanyProfiles, weather, zkteco, users, 'about-developer': aboutDeveloper }[page] || dashboard)();
   } catch (err) {
@@ -1133,18 +1202,59 @@ function deviceForm(id = '') {
 
 function users() {
   setTitle('Users');
-  content.innerHTML = `<button class="btn btn-primary btn-rounded mb-3" id="addUserBtn"><i class="bi bi-plus-lg"></i> Add</button><div class="card table-card"><table class="table mb-0"><thead><tr><th>Username</th><th>Role</th><th>Active</th><th></th></tr></thead><tbody>${state.users.map(u => `<tr><td>${esc(u.username)}</td><td>${esc(u.role)}</td><td>${u.active ? 'Yes' : 'No'}</td><td class="text-end"><button class="btn btn-sm btn-outline-primary edit-user" data-id="${u.id}"><i class="bi bi-pencil"></i></button> <button class="btn btn-sm btn-outline-danger del-user" data-id="${u.id}"><i class="bi bi-trash"></i></button></td></tr>`).join('')}</tbody></table></div>`;
+  content.innerHTML = `<button class="btn btn-primary btn-rounded mb-3" id="addUserBtn"><i class="bi bi-plus-lg"></i> Add</button><div class="card table-card"><table class="table mb-0"><thead><tr><th>Username</th><th>Role</th><th>Access Rights</th><th>Active</th><th></th></tr></thead><tbody>${state.users.map(u => `<tr><td>${esc(u.username)}</td><td>${esc(u.role)}</td><td>${esc(permissionSummary(u))}</td><td>${u.active ? 'Yes' : 'No'}</td><td class="text-end"><button class="btn btn-sm btn-outline-primary edit-user" data-id="${u.id}"><i class="bi bi-pencil"></i></button> <button class="btn btn-sm btn-outline-danger del-user" data-id="${u.id}"><i class="bi bi-trash"></i></button></td></tr>`).join('')}</tbody></table></div>`;
   $('#addUserBtn').onclick = () => userForm();
   document.querySelectorAll('.edit-user').forEach(b => b.onclick = () => userForm(b.dataset.id));
   document.querySelectorAll('.del-user').forEach(b => b.onclick = () => deleteUser(b.dataset.id));
 }
 
+function permissionSummary(user = {}) {
+  const role = String(user.role || '').trim().toLowerCase();
+  if (['administrator', 'admin', 'super admin', 'superadmin'].includes(role)) return 'All access';
+  const permissions = permissionsFor(user);
+  if (!permissions.length) return 'No access';
+  return permissionOptions.filter(([key]) => permissions.includes(key)).map(([, label]) => label).join(', ');
+}
+
 function userForm(id = '') {
-  const u = state.users.find(x => x.id === id) || { active: true, role: 'Administrator' };
+  const u = state.users.find(x => x.id === id) || { active: true, role: 'Custom', permissions: [] };
+  const selected = new Set(Array.isArray(u.permissions) ? u.permissions : []);
   $('#modalTitle').textContent = id ? 'Edit User' : 'Add User';
-  $('#modalBody').innerHTML = `<form id="userForm"><label class="form-label">Username</label><input name="username" class="form-control mb-3" required value="${esc(u.username)}"><label class="form-label">Password ${id ? '(leave blank to keep current)' : ''}</label><input name="password" type="password" class="form-control mb-3" ${id ? '' : 'required'}><label class="form-label">Role</label><input name="role" class="form-control mb-3" value="${esc(u.role)}"><div class="form-check mb-3"><input class="form-check-input" name="active" type="checkbox" ${u.active ? 'checked' : ''}><label class="form-check-label">Active</label></div><button class="btn btn-primary">Save</button></form>`;
+  $('#modalBody').innerHTML = `<form id="userForm">
+    <label class="form-label">Username</label>
+    <input name="username" class="form-control mb-3" required value="${esc(u.username)}">
+    <label class="form-label">Password ${id ? '(leave blank to keep current)' : ''}</label>
+    <input name="password" type="password" class="form-control mb-3" ${id ? '' : 'required'}>
+    <label class="form-label">Role</label>
+    <select name="role" class="form-select mb-3">
+      ${['Super Admin', 'Custom', 'Display', 'Kiosk'].map(role => `<option value="${esc(role)}" ${String(u.role || '').toLowerCase() === role.toLowerCase() ? 'selected' : ''}>${esc(role)}</option>`).join('')}
+    </select>
+    <div class="mb-3">
+      <label class="form-label">Access Rights</label>
+      <div class="row g-2">
+        ${permissionOptions.map(([key, label]) => `<div class="col-md-6"><label class="form-check border rounded px-3 py-2 h-100"><input class="form-check-input user-permission me-2" type="checkbox" value="${esc(key)}" ${selected.has(key) ? 'checked' : ''}>${esc(label)}</label></div>`).join('')}
+      </div>
+      <div class="form-text">Super Admin grants all access. Display/Kiosk users only need Open Displays / Setup.</div>
+    </div>
+    <div class="form-check mb-3"><input class="form-check-input" name="active" type="checkbox" ${u.active ? 'checked' : ''}><label class="form-check-label">Active</label></div>
+    <button class="btn btn-primary">Save</button>
+  </form>`;
   modal.show();
-  $('#userForm').onsubmit = async ev => { ev.preventDefault(); const data = formObject(ev.target); data.active = !!data.active; await api('/api/users/' + id, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); modal.hide(); toast('User saved'); route(); };
+  const roleField = $('#userForm select[name="role"]');
+  const syncRolePermissions = () => {
+    const defaults = roleDefaults[String(roleField.value || '').toLowerCase()];
+    if (!defaults) return;
+    document.querySelectorAll('.user-permission').forEach(input => { input.checked = defaults.includes(input.value); });
+  };
+  roleField.onchange = syncRolePermissions;
+  $('#userForm').onsubmit = async ev => {
+    ev.preventDefault();
+    const data = formObject(ev.target);
+    data.active = !!data.active;
+    data.permissions = [...document.querySelectorAll('.user-permission:checked')].map(input => input.value);
+    await api('/api/users/' + id, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+    modal.hide(); toast('User saved'); route();
+  };
 }
 
 async function deleteUser(id) {

@@ -257,6 +257,25 @@ The browser stores only `display_id` in localStorage.
 
 Display and setup URLs require login. For Android FreeKiosk devices, create a normal active user with role `Display` or `Kiosk`, open the display URL once, sign in, and let the kiosk browser keep the session cookie. A display/kiosk user can open setup and display pages, but cannot open the admin dashboard or admin APIs.
 
+## User Access Rights
+
+Users can be assigned a role preset or one or more access rights:
+
+- `Super Admin`: all access.
+- `Display` / `Kiosk`: open display and setup pages only.
+- `Custom`: assign one or several rights manually.
+
+Available rights:
+
+- Dashboard
+- Manage Employees
+- Manage Displays
+- Manage Company Profiles
+- Manage Weather
+- Manage ZKTeco
+- Manage Users
+- Open Displays / Setup
+
 ## ZKTeco Sync
 
 Enabled ZKTeco devices are synced automatically every `ZKTECO_SYNC_INTERVAL_SECONDS` seconds. The default is `60`.

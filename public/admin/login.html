@@ -14,10 +14,10 @@
       <div class="polaris-brand">
         <img src="/Logo/logo.png" alt="Polaris logo">
         <div>
-          <p>Digital Office System</p>
+          <p id="loginEyebrow">Digital Office System</p>
         </div>
       </div>
-      <p class="polaris-lead">A centralized digital office platform for Polaris displays, organization charts, live employee status, digital announcements, and office display automation.</p>
+      <p id="loginLead" class="polaris-lead">A centralized digital office platform for Polaris displays, organization charts, live employee status, digital announcements, and office display automation.</p>
       <button id="showLoginBtn" class="polaris-access-btn" type="button"><i class="bi bi-terminal"></i> Login</button>
       <div class="polaris-feature-grid">
         <span><i class="bi bi-display"></i>Polaris</span>
@@ -45,8 +45,8 @@
         <div class="polaris-card-head">
           <img src="/Logo/logo.png" alt="" aria-hidden="true">
           <div>
-            <h2>Access Console</h2>
-            <p>Sign in to manage the digital office system.</p>
+            <h2 id="loginTitle">Access Console</h2>
+            <p id="loginHelp">Sign in to manage the digital office system.</p>
           </div>
         </div>
         <div id="error" class="alert alert-danger d-none"></div>
@@ -71,6 +71,16 @@
     var loginPanel = document.getElementById('loginPanel');
     var showLoginBtn = document.getElementById('showLoginBtn');
     var closeLoginBtn = document.getElementById('closeLoginBtn');
+    var next = new URLSearchParams(window.location.search).get('next') || '/admin/';
+    var isDisplayLogin = next.indexOf('/display/') === 0 || next === '/setup';
+    if (isDisplayLogin) {
+      document.getElementById('loginEyebrow').textContent = 'Display Access';
+      document.getElementById('loginLead').textContent = 'Login to open the Polaris display assigned to this kiosk.';
+      document.getElementById('loginTitle').textContent = 'Login to Open Display';
+      document.getElementById('loginHelp').textContent = 'Enter the display user credentials provided by the administrator.';
+      showLoginBtn.textContent = ' Login to Open Display';
+      showLoginBtn.insertAdjacentHTML('afterbegin', '<i class="bi bi-display"></i>');
+    }
     showLoginBtn.addEventListener('click', function () {
       loginPanel.hidden = false;
       document.getElementById('username').focus();
@@ -87,7 +97,6 @@
     });
     document.getElementById('loginForm').addEventListener('submit', function (event) {
       event.preventDefault();
-      var next = new URLSearchParams(window.location.search).get('next') || '/admin/';
       if (!next.startsWith('/') || next.startsWith('//')) next = '/admin/';
       var form = event.target;
       var button = document.getElementById('loginBtn');

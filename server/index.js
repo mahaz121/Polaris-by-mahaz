@@ -9,7 +9,7 @@ const cors = require('cors');
 const morgan = require('morgan');
 const { Server } = require('socket.io');
 const { root } = require('./utils/dataStore');
-const { requireAuth, requireAdmin } = require('./middleware/auth');
+const { requireAuth, requireAdmin, requirePermission } = require('./middleware/auth');
 const { initSocket } = require('./socket');
 const authRoutes = require('./routes/auth');
 const employeeRoutes = require('./routes/employees');
@@ -57,28 +57,28 @@ app.get('/admin/', requireAdmin, sendAdminIndex);
 app.get('/admin', requireAdmin, (req, res) => res.redirect('/admin/'));
 app.get('/admin/index.html', requireAdmin, sendAdminIndex);
 app.get('/admin/login.html', (req, res) => res.sendFile(path.join(root, 'public', 'admin', 'login.html')));
-app.get('/display/:id', requireAuth, (req, res) => {
+app.get('/display/:id', requirePermission('display.access'), (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.sendFile(path.join(root, 'public', 'display', 'index.html'));
 });
-app.get('/setup', requireAuth, (req, res) => res.sendFile(path.join(root, 'public', 'setup', 'index.html')));
+app.get('/setup', requirePermission('display.access'), (req, res) => res.sendFile(path.join(root, 'public', 'setup', 'index.html')));
 
 app.use('/api/auth', authRoutes);
-app.use('/api/company-profiles', requireAdmin, companyProfileRoutes);
-app.use('/api/display-public', requireAuth, displayPublicRoutes);
-app.use('/api/display', requireAuth, displayPublicRoutes);
-app.get('/api/setup/displays', requireAuth, async (req, res) => {
+app.use('/api/company-profiles', requirePermission('companyProfiles.manage'), companyProfileRoutes);
+app.use('/api/display-public', requirePermission('display.access'), displayPublicRoutes);
+app.use('/api/display', requirePermission('display.access'), displayPublicRoutes);
+app.get('/api/setup/displays', requirePermission('display.access'), async (req, res) => {
   const { readJson } = require('./utils/dataStore');
   const displays = await readJson('displays.json', []);
   res.json(displays.map(d => ({ id: d.id, name: d.name })));
 });
-app.use('/api/employees', requireAdmin, employeeRoutes);
-app.use('/api/departments', requireAdmin, departmentRoutes);
-app.use('/api/displays', requireAdmin, displayRoutes);
-app.use('/api/settings', requireAdmin, settingsRoutes);
-app.use('/api/weather', requireAdmin, weatherRoutes);
-app.use('/api/users', requireAdmin, userRoutes);
-app.use('/api/zkteco', requireAdmin, zktecoRoutes);
+app.use('/api/employees', requirePermission('employees.manage'), employeeRoutes);
+app.use('/api/departments', requirePermission('employees.manage'), departmentRoutes);
+app.use('/api/displays', requirePermission('displays.manage'), displayRoutes);
+app.use('/api/settings', requirePermission('weather.manage'), settingsRoutes);
+app.use('/api/weather', requirePermission('weather.manage'), weatherRoutes);
+app.use('/api/users', requirePermission('users.manage'), userRoutes);
+app.use('/api/zkteco', requirePermission('zkteco.manage'), zktecoRoutes);
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 app.use((err, req, res, next) => {

@@ -88,6 +88,7 @@ function initDatabase() {
       username TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL DEFAULT 'Administrator',
+      permissions TEXT,
       active INTEGER NOT NULL DEFAULT 1,
       must_change_password INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
@@ -239,6 +240,7 @@ function initDatabase() {
   ensureColumn('employees', 'is_department_manager', 'INTEGER NOT NULL DEFAULT 0');
   ensureColumn('employees', 'org_chart_order', 'INTEGER NOT NULL DEFAULT 0');
   ensureColumn('employees', 'short_description', 'TEXT');
+  ensureColumn('users', 'permissions', 'TEXT');
   ensureColumn('departments', 'manager_employee_id', 'TEXT');
   ensureColumn('displays', 'display_mode', "TEXT NOT NULL DEFAULT 'single'");
   ensureColumn('displays', 'display_group', 'TEXT');
@@ -370,8 +372,8 @@ function migrateJsonOnce() {
 
     const insertUser = db.prepare(`
       INSERT OR IGNORE INTO users
-      (id, username, password_hash, role, active, must_change_password, created_at, updated_at)
-      VALUES (@id, @username, @passwordHash, @role, @active, @mustChangePassword, @createdAt, @updatedAt)
+      (id, username, password_hash, role, permissions, active, must_change_password, created_at, updated_at)
+      VALUES (@id, @username, @passwordHash, @role, @permissions, @active, @mustChangePassword, @createdAt, @updatedAt)
     `);
     users.forEach(u => {
       const passwordHash = u.passwordHash || bcrypt.hashSync(u.password || 'admin123', 10);
@@ -380,6 +382,7 @@ function migrateJsonOnce() {
         username: u.username,
         passwordHash,
         role: u.role || 'Administrator',
+        permissions: JSON.stringify(Array.isArray(u.permissions) ? u.permissions : []),
         active: u.active === false ? 0 : 1,
         mustChangePassword: u.mustChangePassword ? 1 : 0,
         createdAt: u.createdAt || nowIso(),
@@ -398,9 +401,9 @@ function ensureDefaultAdmin() {
   const count = db.prepare('SELECT COUNT(*) AS count FROM users').get().count;
   if (count) return;
   db.prepare(`
-    INSERT INTO users (id, username, password_hash, role, active, must_change_password, created_at, updated_at)
-    VALUES (?, ?, ?, ?, 1, 1, ?, ?)
-  `).run('user001', 'admin', bcrypt.hashSync('admin123', 10), 'Administrator', nowIso(), nowIso());
+    INSERT INTO users (id, username, password_hash, role, permissions, active, must_change_password, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 1, 1, ?, ?)
+  `).run('user001', 'admin', bcrypt.hashSync('admin123', 10), 'Administrator', JSON.stringify([]), nowIso(), nowIso());
 }
 
 function removeDefaultCompanyName() {
@@ -832,6 +835,7 @@ function mapUser(row) {
     username: row.username,
     passwordHash: row.password_hash,
     role: row.role,
+    permissions: parseJson(row.permissions, []),
     active: !!row.active,
     mustChangePassword: !!row.must_change_password,
     createdAt: row.created_at,
@@ -1016,14 +1020,15 @@ async function writeJson(name, value) {
     const tx = db.transaction(items => {
       db.prepare('DELETE FROM users').run();
       const stmt = db.prepare(`
-        INSERT INTO users (id, username, password_hash, role, active, must_change_password, created_at, updated_at)
-        VALUES (@id, @username, @passwordHash, @role, @active, @mustChangePassword, @createdAt, @updatedAt)
+        INSERT INTO users (id, username, password_hash, role, permissions, active, must_change_password, created_at, updated_at)
+        VALUES (@id, @username, @passwordHash, @role, @permissions, @active, @mustChangePassword, @createdAt, @updatedAt)
       `);
       items.forEach(u => stmt.run({
         id: u.id,
         username: u.username,
         passwordHash: u.passwordHash || bcrypt.hashSync(u.password || 'admin123', 10),
         role: u.role || 'Administrator',
+        permissions: JSON.stringify(Array.isArray(u.permissions) ? u.permissions : []),
         active: u.active === false ? 0 : 1,
         mustChangePassword: u.mustChangePassword ? 1 : 0,
         createdAt: u.createdAt || stamp,

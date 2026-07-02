@@ -1,7 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { readJson, writeJson } = require('../utils/dataStore');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, userPermissions } = require('../middleware/auth');
 const router = express.Router();
 
 router.post('/login', async (req, res) => {
@@ -24,6 +24,7 @@ router.post('/login', async (req, res) => {
       id: user.id,
       username: user.username,
       role: user.role,
+      permissions: userPermissions(user),
       mustChangePassword: !!user.mustChangePassword
     };
     res.json({ ok: true, user: req.session.user, mustChangePassword: !!user.mustChangePassword });
