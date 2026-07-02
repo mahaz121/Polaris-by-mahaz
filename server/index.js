@@ -73,7 +73,7 @@ app.get('/api/setup/displays', requirePermission('display.access'), async (req, 
   const displays = await readJson('displays.json', []);
   res.json(displays.map(d => ({ id: d.id, name: d.name })));
 });
-app.use('/api/employees', requireAnyPermission(['employees.view', 'employeeStatus.view', 'employees.manage', 'displays.manage', 'dashboard.view']), employeeRoutes);
+app.use('/api/employees', requireAnyPermission(['employees.view', 'employeeStatus.view', 'employees.manage', 'displays.manage']), employeeRoutes);
 app.use('/api/departments', requirePermission('employees.manage'), departmentRoutes);
 app.use('/api/displays', requirePermission('displays.manage'), displayRoutes);
 app.use('/api/settings', requirePermission('weather.manage'), settingsRoutes);

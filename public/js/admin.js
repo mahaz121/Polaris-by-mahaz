@@ -68,7 +68,10 @@ function firstAllowedPage() {
 function applyNavigation() {
   document.querySelectorAll('.nav-link').forEach(link => {
     const page = (link.hash || '').replace('#', '');
-    link.hidden = !canOpenPage(page);
+    const allowed = canOpenPage(page);
+    link.hidden = !allowed;
+    link.style.display = allowed ? '' : 'none';
+    if (!allowed) link.classList.remove('active');
   });
 }
 const linkFor = id => {
@@ -198,7 +201,7 @@ async function load() {
   const currentPermissions = permissionsFor(currentUser);
   const can = permission => currentPermissions.includes(permission);
   const [employees, displays, departments, settings, users, devices, companyProfiles] = await Promise.all([
-    can('employees.view') || can('employeeStatus.view') || can('employees.manage') || can('displays.manage') || can('dashboard.view') ? api('/api/employees') : Promise.resolve([]),
+    can('employees.view') || can('employeeStatus.view') || can('employees.manage') || can('displays.manage') ? api('/api/employees') : Promise.resolve([]),
     can('displays.manage') ? api('/api/displays') : Promise.resolve([]),
     can('employees.manage') || can('displays.manage') ? api('/api/departments') : Promise.resolve([]),
     can('weather.manage') ? api('/api/settings') : Promise.resolve({}),
@@ -255,17 +258,19 @@ function avatar(e) {
 
 function dashboard() {
   setTitle('Dashboard');
+  const canSeeEmployees = hasAnyPermission(['employees.view', 'employeeStatus.view', 'employees.manage']);
+  const canSeeDisplays = hasPermission('displays.manage');
+  const canSeeWeather = hasPermission('weather.manage');
   const online = state.displays.filter(d => d.status === 'Online').length;
   const available = state.employees.filter(e => e.effectiveStatus && e.effectiveStatus.status === 'Available').length;
   const offline = state.displays.length - online;
   const inactiveEmployees = state.employees.filter(e => e.status !== 'Active').length;
   const weather = state.settings.weather?.data || {};
-  const cards = [
-    ['Employees', state.employees.length, 'bi-people', `${inactiveEmployees} inactive`],
-    ['Displays Online', online, 'bi-broadcast-pin', `${offline} offline`],
-    ['Available Now', available, 'bi-check2-circle', `${state.employees.length - available} not available`],
-    ['Weather', weather.temperature == null ? '--' : `${weather.temperature}°`, 'bi-cloud-sun', weather.city || state.settings.weather?.city || 'Not configured']
-  ];
+  const cards = [];
+  if (canSeeEmployees) cards.push(['Employees', state.employees.length, 'bi-people', `${inactiveEmployees} inactive`]);
+  if (canSeeDisplays) cards.push(['Displays Online', online, 'bi-broadcast-pin', `${offline} offline`]);
+  if (canSeeEmployees && hasAnyPermission(['employeeStatus.view', 'employees.manage'])) cards.push(['Available Now', available, 'bi-check2-circle', `${state.employees.length - available} not available`]);
+  if (canSeeWeather) cards.push(['Weather', weather.temperature == null ? '--' : `${weather.temperature}°`, 'bi-cloud-sun', weather.city || state.settings.weather?.city || 'Not configured']);
   content.innerHTML = `
     <div class="admin-dashboard">
       <section class="dashboard-hero">
@@ -276,7 +281,7 @@ function dashboard() {
         </div>
       </section>
 
-      <section class="dashboard-kpis">
+      ${cards.length ? `<section class="dashboard-kpis">
         ${cards.map(c => `<article class="dashboard-kpi">
           <div class="dashboard-kpi-icon"><i class="bi ${c[2]}"></i></div>
           <div>
@@ -285,17 +290,19 @@ function dashboard() {
             <small>${esc(c[3])}</small>
           </div>
         </article>`).join('')}
-      </section>
+      </section>` : '<div class="alert alert-info">Dashboard access is active. Additional dashboard metrics appear when employee, display, or weather rights are assigned.</div>'}
 
-      <section class="dashboard-grid">
+      ${canSeeDisplays ? `<section class="dashboard-grid">
         <article class="dashboard-panel dashboard-panel-wide">
           <div class="dashboard-panel-head"><div><span>Network</span><h3>Display Status</h3></div>${displayColumnSelector()}</div>
           <div class="dashboard-table-wrap">${displayTable()}</div>
         </article>
-      </section>
+      </section>` : ''}
     </div>`;
-  bindDisplayColumnControls();
-  bindDisplayActions();
+  if (canSeeDisplays) {
+    bindDisplayColumnControls();
+    bindDisplayActions();
+  }
 }
 
 function aboutDeveloper() {
