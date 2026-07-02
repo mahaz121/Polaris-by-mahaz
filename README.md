@@ -255,6 +255,21 @@ http://SERVER-IP:3004/display/display-id
 
 The browser stores only `display_id` in localStorage.
 
+Display and setup URLs require login. For Android FreeKiosk devices, create a normal active user with role `Display` or `Kiosk`, open the display URL once, sign in, and let the kiosk browser keep the session cookie. A display/kiosk user can open setup and display pages, but cannot open the admin dashboard or admin APIs.
+
+## ZKTeco Sync
+
+Enabled ZKTeco devices are synced automatically every `ZKTECO_SYNC_INTERVAL_SECONDS` seconds. The default is `60`.
+
+```env
+ZKTECO_SYNC_INTERVAL_SECONDS=60
+PRESENCE_WINDOW_HOURS=18
+```
+
+Device host values may be entered as an IP address, hostname, `host:port`, or TCP-style endpoint. ZKTeco uses a raw TCP connection, so HTTP/HTTPS ngrok URLs do not work. For ngrok, use a TCP tunnel host and port, for example `0.tcp.ngrok.io` with the assigned TCP port.
+
+Employee availability depends on attendance punch logs inside the presence window. Fingerprint enrollment alone does not mark an employee as `Available`; the employee number in Polaris must match the ZKTeco user ID/PIN that appears in attendance logs.
+
 ## GitHub Readiness
 
 Do not commit:

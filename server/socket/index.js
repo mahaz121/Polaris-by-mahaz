@@ -5,6 +5,10 @@ const { effectiveEmployeeStatus } = require('../utils/status');
 const displaySockets = new Map();
 let ioRef;
 
+function isDisplayRole(user = {}) {
+  return ['display', 'kiosk', 'viewer'].includes(String(user.role || '').trim().toLowerCase());
+}
+
 async function buildPayload(displayId) {
   return buildDisplayPayload(displayId);
 }
@@ -26,10 +30,17 @@ async function markDisplay(displayId, socket, status) {
   }
 }
 
-function initSocket(io) {
+function initSocket(io, sessionMiddleware) {
   ioRef = io;
+  if (sessionMiddleware) {
+    io.use((socket, next) => sessionMiddleware(socket.request, {}, next));
+  }
   io.on('connection', socket => {
     socket.on('register-display', async ({ displayId, resolution }) => {
+      if (!socket.request.session || !socket.request.session.user) {
+        socket.emit('auth-required');
+        return;
+      }
       if (!displayId) return;
       socket.displayId = displayId;
       socket.join(`display:${displayId}`);
@@ -39,7 +50,10 @@ function initSocket(io) {
       socket.emit('display-data', await buildPayload(displayId));
     });
 
-    socket.on('admin-watch', () => socket.join('admins'));
+    socket.on('admin-watch', () => {
+      const user = socket.request.session && socket.request.session.user;
+      if (user && !isDisplayRole(user)) socket.join('admins');
+    });
 
     socket.on('disconnect', async () => {
       const displayId = displaySockets.get(socket.id);

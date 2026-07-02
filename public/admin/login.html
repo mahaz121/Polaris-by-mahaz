@@ -87,6 +87,8 @@
     });
     document.getElementById('loginForm').addEventListener('submit', function (event) {
       event.preventDefault();
+      var next = new URLSearchParams(window.location.search).get('next') || '/admin/';
+      if (!next.startsWith('/') || next.startsWith('//')) next = '/admin/';
       var form = event.target;
       var button = document.getElementById('loginBtn');
       var error = document.getElementById('error');
@@ -104,7 +106,7 @@
         })
       }).then(function (response) {
         if (response.ok) {
-          window.location.replace('/admin/');
+          window.location.replace(next);
           return null;
         }
         return response.json().then(function (data) {

@@ -8,12 +8,36 @@ const { emitAllDisplays, emitAdminStats } = require('../socket');
 
 const router = express.Router();
 
+function normalizeDeviceEndpoint(inputHost, inputPort) {
+  let host = String(inputHost || '').trim();
+  let port = Number(inputPort || 4370);
+  if (!host) return { host: '', port };
+
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(host)) {
+    try {
+      const parsed = new URL(host);
+      host = parsed.hostname || host;
+      if (parsed.port) port = Number(parsed.port);
+    } catch {}
+  } else {
+    const hostPort = host.match(/^\[?([^\]]+)\]?:(\d+)$/);
+    if (hostPort) {
+      host = hostPort[1];
+      port = Number(hostPort[2]);
+    }
+  }
+
+  host = host.replace(/^https?:\/\//i, '').replace(/^tcp:\/\//i, '').split('/')[0].trim();
+  return { host, port: Number(port || 4370) };
+}
+
 function normalizeDevice(body, existing = {}) {
+  const endpoint = normalizeDeviceEndpoint(body.ip || existing.ip || '', body.port || existing.port || 4370);
   return {
     id: existing.id || body.id || randomUUID(),
     name: body.name || existing.name || 'ZKTeco Device',
-    ip: body.ip || existing.ip || '',
-    port: Number(body.port || existing.port || 4370),
+    ip: endpoint.host,
+    port: endpoint.port,
     enabled: body.enabled === true || body.enabled === 'true' || body.enabled === 'on',
     pollingInterval: Number(body.pollingInterval || existing.pollingInterval || 300),
     punchLogic: body.punchLogic || existing.punchLogic || 'latest_available',
