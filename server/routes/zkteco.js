@@ -43,7 +43,7 @@ function normalizeDevice(body, existing = {}) {
     port: endpoint.port,
     enabled: body.enabled === true || body.enabled === 'true' || body.enabled === 'on',
     pollingInterval: Number(body.pollingInterval || existing.pollingInterval || 300),
-    punchLogic: body.punchLogic || existing.punchLogic || 'latest_available',
+    punchLogic: body.punchLogic || existing.punchLogic || 'odd_even',
     userIdMap: existing.userIdMap || {},
     lastSyncAt: existing.lastSyncAt || '',
     lastError: existing.lastError || '',
@@ -225,7 +225,7 @@ pushRouter.post('/push', async (req, res) => {
       port: endpoint.port || 4370,
       enabled: true,
       pollingInterval: 60,
-      punchLogic: 'latest_available'
+      punchLogic: 'odd_even'
     });
     devices.push(device);
   }

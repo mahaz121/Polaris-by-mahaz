@@ -28,34 +28,36 @@ function activeOverride(employeeId, at = new Date()) {
 
 function presenceLogic() {
   const device = db.prepare('SELECT punch_logic FROM zkteco_devices WHERE enabled = 1 ORDER BY updated_at DESC LIMIT 1').get();
-  return device?.punch_logic || process.env.ZKTECO_PRESENCE_LOGIC || 'latest_available';
+  return device?.punch_logic || process.env.ZKTECO_PRESENCE_LOGIC || 'odd_even';
+}
+
+function localDayStart(at = new Date()) {
+  const start = new Date(at);
+  start.setHours(0, 0, 0, 0);
+  return start;
+}
+
+function punchDirection(log, index) {
+  const raw = String(log.punch_type || '').trim().toLowerCase();
+  if (/check.?out|\bout\b|^1$/.test(raw)) return 'out';
+  if (/check.?in|\bin\b|^0$/.test(raw)) return 'in';
+  return index % 2 === 0 ? 'in' : 'out';
 }
 
 function attendanceStatus(employeeNumber, at = new Date(), logic = presenceLogic()) {
   if (!employeeNumber) return 'Not Available';
-  const windowHours = Number(process.env.PRESENCE_WINDOW_HOURS || 18);
-  const start = new Date(at.getTime() - windowHours * 60 * 60 * 1000);
+  const start = localDayStart(at);
   const logs = db.prepare(`
     SELECT punch_time, punch_type FROM attendance_logs
-    WHERE employee_number = ? AND punch_time >= ?
+    WHERE employee_number = ? AND punch_time >= ? AND punch_time <= ?
     ORDER BY punch_time ASC
-  `).all(employeeNumber, start.toISOString());
+  `).all(employeeNumber, start.toISOString(), at.toISOString());
   if (!logs.length) return 'Not Available';
 
-  const explicit = logs.filter(l => l.punch_type);
-  if (explicit.length) {
-    const ins = explicit.filter(l => /in|checkin|check-in/i.test(l.punch_type));
-    const outs = explicit.filter(l => /out|checkout|check-out/i.test(l.punch_type));
-    if (!ins.length && !outs.length && logic === 'latest_available') return 'Available';
-    const latestIn = ins.length ? ins[ins.length - 1] : null;
-    const latestOut = outs.length ? outs[outs.length - 1] : null;
-    if (!latestIn) return 'Not Available';
-    if (latestOut && new Date(latestOut.punch_time) > new Date(latestIn.punch_time)) return 'Not Available';
-    return 'Available';
-  }
-
-  if (logic === 'latest_available') return 'Available';
-  return logs.length % 2 === 1 ? 'Available' : 'Not Available';
+  const latestIndex = logs.length - 1;
+  const latestDirection = punchDirection(logs[latestIndex], latestIndex);
+  if (logic === 'latest_available' && logs[latestIndex].punch_type && latestDirection !== 'out') return 'Available';
+  return latestDirection === 'in' ? 'Available' : 'Not Available';
 }
 
 function effectiveEmployeeStatus(employee) {
