@@ -68,10 +68,11 @@ function effectiveEmployeeStatus(employee) {
 }
 
 function insertAttendanceLog({ employeeNumber, deviceId, punchTime, punchType = '', rawData = {} }) {
-  db.prepare(`
+  const result = db.prepare(`
     INSERT OR IGNORE INTO attendance_logs (employee_number, device_id, punch_time, punch_type, raw_data, created_at)
     VALUES (?, ?, ?, ?, ?, ?)
   `).run(employeeNumber, deviceId || '', punchTime, punchType || '', JSON.stringify(rawData || {}), nowIso());
+  return result.changes || 0;
 }
 
 module.exports = {

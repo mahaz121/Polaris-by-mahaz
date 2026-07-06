@@ -219,6 +219,7 @@ function initDatabase() {
       enabled INTEGER NOT NULL DEFAULT 0,
       polling_interval INTEGER NOT NULL DEFAULT 300,
       punch_logic TEXT NOT NULL DEFAULT 'latest_available',
+      user_id_map TEXT,
       last_sync_at TEXT,
       last_error TEXT,
       created_at TEXT NOT NULL,
@@ -273,6 +274,7 @@ function initDatabase() {
   ensureColumn('company_profiles', 'office_end_time', "TEXT DEFAULT '16:00'");
   ensureColumn('company_profiles', 'latest_arrival_time', "TEXT DEFAULT '08:30'");
   ensureColumn('company_profiles', 'off_days', 'TEXT');
+  ensureColumn('zkteco_devices', 'user_id_map', 'TEXT');
   migrateJsonOnce();
   ensureDepartmentsFromEmployees();
   removeDefaultCompanyName();
@@ -889,6 +891,7 @@ function mapDevice(row) {
     enabled: !!row.enabled,
     pollingInterval: row.polling_interval,
     punchLogic: row.punch_logic,
+    userIdMap: parseJson(row.user_id_map, {}),
     lastSyncAt: row.last_sync_at || '',
     lastError: row.last_error || '',
     createdAt: row.created_at,
@@ -1083,8 +1086,8 @@ async function writeJson(name, value) {
     const tx = db.transaction(items => {
       db.prepare('DELETE FROM zkteco_devices').run();
       const stmt = db.prepare(`
-        INSERT INTO zkteco_devices (id, name, ip, port, enabled, polling_interval, punch_logic, last_sync_at, last_error, created_at, updated_at)
-        VALUES (@id, @name, @ip, @port, @enabled, @pollingInterval, @punchLogic, @lastSyncAt, @lastError, @createdAt, @updatedAt)
+        INSERT INTO zkteco_devices (id, name, ip, port, enabled, polling_interval, punch_logic, user_id_map, last_sync_at, last_error, created_at, updated_at)
+        VALUES (@id, @name, @ip, @port, @enabled, @pollingInterval, @punchLogic, @userIdMap, @lastSyncAt, @lastError, @createdAt, @updatedAt)
       `);
       items.forEach(d => stmt.run({
         id: d.id,
@@ -1093,7 +1096,8 @@ async function writeJson(name, value) {
         port: Number(d.port || 4370),
         enabled: d.enabled ? 1 : 0,
         pollingInterval: Number(d.pollingInterval || 300),
-        punchLogic: d.punchLogic || 'odd_even',
+        punchLogic: d.punchLogic || 'latest_available',
+        userIdMap: json(d.userIdMap || {}),
         lastSyncAt: d.lastSyncAt || null,
         lastError: d.lastError || '',
         createdAt: d.createdAt || stamp,

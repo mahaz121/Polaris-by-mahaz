@@ -1329,7 +1329,16 @@ function zkteco() {
   setTitle('ZKTeco');
   content.innerHTML = `<button class="btn btn-primary btn-rounded mb-3" id="addDeviceBtn"><i class="bi bi-plus-lg"></i> Add Device</button> <button class="btn btn-outline-secondary btn-rounded mb-3" id="syncBtn"><i class="bi bi-arrow-repeat"></i> Sync Now</button><div class="card table-card"><table class="table mb-0"><thead><tr><th>Name</th><th>IP</th><th>Port</th><th>Enabled</th><th>Interval</th><th>Last Sync</th><th>Error</th><th></th></tr></thead><tbody>${state.devices.map(d => `<tr><td>${esc(d.name)}</td><td>${esc(d.ip)}</td><td>${esc(d.port)}</td><td>${d.enabled ? 'Yes' : 'No'}</td><td>${esc(d.pollingInterval)}s</td><td>${esc(localDateTime(d.lastSyncAt))}</td><td>${esc(d.lastError || '')}</td><td class="text-end"><button class="btn btn-sm btn-outline-primary edit-device" data-id="${d.id}"><i class="bi bi-pencil"></i></button> <button class="btn btn-sm btn-outline-danger del-device" data-id="${d.id}"><i class="bi bi-trash"></i></button></td></tr>`).join('')}</tbody></table></div>`;
   $('#addDeviceBtn').onclick = () => deviceForm();
-  $('#syncBtn').onclick = async () => { const r = await api('/api/zkteco/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); const hasErrors = r.results && r.results.some(x => !x.ok); toast(hasErrors ? 'Sync completed with device errors' : 'Sync completed', hasErrors ? 'warning' : 'success'); route(); };
+  $('#syncBtn').onclick = async () => {
+    const r = await api('/api/zkteco/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const results = r.results || [];
+    const hasErrors = results.some(x => !x.ok);
+    const imported = results.reduce((sum, item) => sum + Number(item.imported || 0), 0);
+    const total = results.reduce((sum, item) => sum + Number(item.total || 0), 0);
+    const message = hasErrors ? 'Sync completed with device errors' : imported ? `Sync imported ${imported} new punch${imported === 1 ? '' : 'es'}` : `Sync read ${total} row${total === 1 ? '' : 's'} but imported 0 new punches`;
+    toast(message, hasErrors || !imported ? 'warning' : 'success');
+    route();
+  };
   document.querySelectorAll('.edit-device').forEach(b => b.onclick = () => deviceForm(b.dataset.id));
   document.querySelectorAll('.del-device').forEach(b => b.onclick = async () => { await api(`/api/zkteco/devices/${b.dataset.id}`, { method: 'DELETE' }); toast('Device deleted'); route(); });
 }

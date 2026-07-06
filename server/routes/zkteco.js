@@ -42,6 +42,7 @@ function normalizeDevice(body, existing = {}) {
     enabled: body.enabled === true || body.enabled === 'true' || body.enabled === 'on',
     pollingInterval: Number(body.pollingInterval || existing.pollingInterval || 300),
     punchLogic: body.punchLogic || existing.punchLogic || 'latest_available',
+    userIdMap: existing.userIdMap || {},
     lastSyncAt: existing.lastSyncAt || '',
     lastError: existing.lastError || '',
     createdAt: existing.createdAt || nowIso(),
@@ -75,6 +76,14 @@ function buildUserIdMap(usersResult) {
   return map;
 }
 
+function mapToObject(map) {
+  return Object.fromEntries([...map.entries()]);
+}
+
+function objectToMap(value) {
+  return new Map(Object.entries(value || {}).filter(([, userId]) => userId));
+}
+
 function parsePunchTime(value) {
   if (!value) return '';
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString();
@@ -96,33 +105,58 @@ function normalizePunch(raw, userIdMap) {
 }
 
 async function pullDeviceLogs(device) {
-  const zk = new ZKLib(device.ip, device.port, 8000, 5000);
+  const connectTimeout = Number(process.env.ZKTECO_CONNECT_TIMEOUT_MS || 20000);
+  const commandTimeout = Number(process.env.ZKTECO_COMMAND_TIMEOUT_MS || 10000);
+  const zk = new ZKLib(device.ip, device.port, connectTimeout, commandTimeout);
   try {
     await zk.createSocket();
-    let userIdMap = new Map();
+    let userIdMap = objectToMap(device.userIdMap);
+    let userMapSource = userIdMap.size ? 'cache' : 'none';
     try {
-      userIdMap = buildUserIdMap(await zk.getUsers());
+      const freshUserIdMap = buildUserIdMap(await zk.getUsers());
+      if (freshUserIdMap.size) {
+        userIdMap = freshUserIdMap;
+        userMapSource = 'device';
+      }
     } catch {
-      userIdMap = new Map();
+      userMapSource = userIdMap.size ? 'cache' : 'none';
     }
     const result = await zk.getAttendances();
     const rows = rowsFromResult(result);
     let imported = 0;
+    let duplicates = 0;
+    let skipped = 0;
     const sample = [];
+    let latestPunchTime = '';
     rows.forEach(raw => {
       const punch = normalizePunch(raw, userIdMap);
-      if (!punch.employeeNumber || !punch.punchTime) return;
-      insertAttendanceLog({
+      if (!punch.employeeNumber || !punch.punchTime) {
+        skipped += 1;
+        return;
+      }
+      const inserted = insertAttendanceLog({
         employeeNumber: punch.employeeNumber,
         deviceId: device.id,
         punchTime: punch.punchTime,
         punchType: punch.punchType,
         rawData: raw
       });
-      imported += 1;
+      imported += inserted;
+      if (!inserted) duplicates += 1;
+      if (!latestPunchTime || new Date(punch.punchTime) > new Date(latestPunchTime)) latestPunchTime = punch.punchTime;
       if (sample.length < 5) sample.push({ employeeNumber: punch.employeeNumber, punchTime: punch.punchTime });
     });
-    return { imported, total: rows.length, mappedUsers: userIdMap.size, sample };
+    return {
+      imported,
+      duplicates,
+      skipped,
+      total: rows.length,
+      mappedUsers: userIdMap.size,
+      userMapSource,
+      userIdMap: mapToObject(userIdMap),
+      latestPunchTime,
+      sample
+    };
   } finally {
     if (typeof zk.disconnect === 'function') {
       await zk.disconnect().catch(() => {});
@@ -196,7 +230,16 @@ async function syncEnabledDevices(extraLogs = [], force = false) {
         }));
       }
       device.lastSyncAt = nowIso();
-      device.lastError = '';
+      if (syncInfo.userIdMap && Object.keys(syncInfo.userIdMap).length) device.userIdMap = syncInfo.userIdMap;
+      if (!syncInfo.total) {
+        device.lastError = 'Warning: connected, but device returned 0 attendance rows.';
+      } else if (!syncInfo.imported) {
+        device.lastError = `Warning: ${syncInfo.total} attendance rows read, but 0 new punches imported. Latest returned: ${syncInfo.latestPunchTime || 'none'}.`;
+      } else if (!syncInfo.mappedUsers) {
+        device.lastError = 'Warning: attendance imported without ZKTeco user mapping; employee numbers may not match.';
+      } else {
+        device.lastError = '';
+      }
       results.push({ deviceId: device.id, ok: true, ...syncInfo });
     } catch (err) {
       device.lastError = err.message;
