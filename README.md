@@ -391,59 +391,11 @@ PRESENCE_WINDOW_HOURS=18
 WORK_DAY_START=07:30
 WORK_DAY_END=16:00
 LATEST_ARRIVAL_TIME=08:30
-ZKTECO_PUSH_TOKEN=generate-a-long-random-token
-POLARIS_PUSH_URL=https://polaris.mahaz.uk
-ZKTECO_BRIDGE_DEVICE_NAME=HO
-ZKTECO_BRIDGE_DEVICE_IP=192.168.1.201
-ZKTECO_BRIDGE_DEVICE_PORT=4370
-ZKTECO_BRIDGE_INTERVAL_SECONDS=60
 ```
 
 Device host values may be entered as an IP address, hostname, `host:port`, or TCP-style endpoint. ZKTeco uses a raw TCP connection, so HTTP/HTTPS ngrok URLs do not work. For ngrok, use a TCP tunnel host and port, for example `0.tcp.ngrok.io` with the assigned TCP port.
 
 Employee availability depends on attendance punch logs inside the presence window. Fingerprint enrollment alone does not mark an employee as `Available`; the employee number in Polaris must match the ZKTeco user ID/PIN that appears in attendance logs.
-
-### ZKTeco Bridge To Polaris HTTPS
-
-Use this when the Polaris server cannot reliably pull the fingerprint device directly. The bridge runs inside the office network, reads the ZKTeco device by local IP, and pushes attendance logs to Polaris over HTTPS.
-
-Flow:
-
-```text
-ZKTeco Device -> local bridge script -> https://polaris.mahaz.uk/api/zkteco/push -> Polaris
-```
-
-On the Polaris server, set the same token in `.env`:
-
-```env
-ZKTECO_PUSH_TOKEN=use-a-long-random-secret
-```
-
-On the office bridge machine, install the project or copy the project folder, then set:
-
-```env
-POLARIS_PUSH_URL=https://polaris.mahaz.uk
-ZKTECO_PUSH_TOKEN=use-the-same-long-random-secret
-ZKTECO_BRIDGE_DEVICE_NAME=HO
-ZKTECO_BRIDGE_DEVICE_IP=192.168.1.201
-ZKTECO_BRIDGE_DEVICE_PORT=4370
-ZKTECO_BRIDGE_INTERVAL_SECONDS=60
-```
-
-Run once:
-
-```bash
-node scripts/zkteco-bridge.js --once
-```
-
-Run continuously with PM2:
-
-```bash
-pm2 start scripts/zkteco-bridge.js --name polaris-zkteco-bridge
-pm2 save
-```
-
-This bridge is preferred over raw ZKTeco over ngrok TCP. Ngrok may connect but return old or incomplete attendance rows for some ZKTeco devices.
 
 The Employees page includes a `Timesheet` option. Polaris treats check-in punches as inside/available and check-out punches as outside/not available. When the device sends no explicit punch type, Polaris pairs punches in order as in/out/in/out. The daily report shows first in, last out, expected out, total inside time, outside time during working hours, current inside status, punch count, and Excel-compatible export.
 

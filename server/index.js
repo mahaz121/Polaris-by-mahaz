@@ -20,7 +20,7 @@ const companyProfileRoutes = require('./routes/companyProfiles');
 const { router: weatherRoutes, fetchWeather } = require('./routes/weather');
 const userRoutes = require('./routes/users');
 const displayPublicRoutes = require('./routes/displayPublic');
-const { router: zktecoRoutes, pushRouter: zktecoPushRoutes, syncEnabledDevices } = require('./routes/zkteco');
+const { router: zktecoRoutes, syncEnabledDevices } = require('./routes/zkteco');
 const { effectiveEmployeeStatus } = require('./utils/status');
 const { dailyTimesheet, todayString } = require('./utils/timesheet');
 
@@ -67,7 +67,6 @@ app.get('/display/:id', requirePermission('display.access'), (req, res) => {
 app.get('/setup', requirePermission('display.access'), (req, res) => res.sendFile(path.join(root, 'public', 'setup', 'index.html')));
 
 app.use('/api/auth', authRoutes);
-app.use('/api/zkteco', zktecoPushRoutes);
 app.get('/api/dashboard', requirePermission('dashboard.view'), async (req, res) => {
   const { readJson } = require('./utils/dataStore');
   const employees = await readJson('employees.json', []);

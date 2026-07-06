@@ -14,8 +14,7 @@
     "pm2:stop": "pm2 stop polaris",
     "pm2:status": "pm2 status polaris",
     "pm2:logs": "pm2 logs polaris",
-    "update": "bash scripts/update.sh",
-    "zkteco:bridge": "node scripts/zkteco-bridge.js"
+    "update": "bash scripts/update.sh"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

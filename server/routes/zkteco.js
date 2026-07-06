@@ -8,8 +8,6 @@ const { dailyTimesheet, todayString } = require('../utils/timesheet');
 const { emitAllDisplays, emitAdminStats } = require('../socket');
 
 const router = express.Router();
-const pushRouter = express.Router();
-const pushToken = () => process.env.ZKTECO_PUSH_TOKEN || process.env.POLARIS_BRIDGE_TOKEN || '';
 
 function normalizeDeviceEndpoint(inputHost, inputPort) {
   let host = String(inputHost || '').trim();
@@ -106,33 +104,6 @@ function normalizePunch(raw, userIdMap) {
   };
 }
 
-function importAttendanceRows(rows, device, userIdMap) {
-  let imported = 0;
-  let duplicates = 0;
-  let skipped = 0;
-  const sample = [];
-  let latestPunchTime = '';
-  rows.forEach(raw => {
-    const punch = normalizePunch(raw, userIdMap);
-    if (!punch.employeeNumber || !punch.punchTime) {
-      skipped += 1;
-      return;
-    }
-    const inserted = insertAttendanceLog({
-      employeeNumber: punch.employeeNumber,
-      deviceId: device.id,
-      punchTime: punch.punchTime,
-      punchType: punch.punchType,
-      rawData: raw
-    });
-    imported += inserted;
-    if (!inserted) duplicates += 1;
-    if (!latestPunchTime || new Date(punch.punchTime) > new Date(latestPunchTime)) latestPunchTime = punch.punchTime;
-    if (sample.length < 5) sample.push({ employeeNumber: punch.employeeNumber, punchTime: punch.punchTime });
-  });
-  return { imported, duplicates, skipped, total: rows.length, latestPunchTime, sample };
-}
-
 async function pullDeviceLogs(device) {
   const connectTimeout = Number(process.env.ZKTECO_CONNECT_TIMEOUT_MS || 20000);
   const commandTimeout = Number(process.env.ZKTECO_COMMAND_TIMEOUT_MS || 10000);
@@ -152,12 +123,39 @@ async function pullDeviceLogs(device) {
     }
     const result = await zk.getAttendances();
     const rows = rowsFromResult(result);
-    const importedRows = importAttendanceRows(rows, device, userIdMap);
+    let imported = 0;
+    let duplicates = 0;
+    let skipped = 0;
+    const sample = [];
+    let latestPunchTime = '';
+    rows.forEach(raw => {
+      const punch = normalizePunch(raw, userIdMap);
+      if (!punch.employeeNumber || !punch.punchTime) {
+        skipped += 1;
+        return;
+      }
+      const inserted = insertAttendanceLog({
+        employeeNumber: punch.employeeNumber,
+        deviceId: device.id,
+        punchTime: punch.punchTime,
+        punchType: punch.punchType,
+        rawData: raw
+      });
+      imported += inserted;
+      if (!inserted) duplicates += 1;
+      if (!latestPunchTime || new Date(punch.punchTime) > new Date(latestPunchTime)) latestPunchTime = punch.punchTime;
+      if (sample.length < 5) sample.push({ employeeNumber: punch.employeeNumber, punchTime: punch.punchTime });
+    });
     return {
-      ...importedRows,
+      imported,
+      duplicates,
+      skipped,
+      total: rows.length,
       mappedUsers: userIdMap.size,
       userMapSource,
       userIdMap: mapToObject(userIdMap),
+      latestPunchTime,
+      sample
     };
   } finally {
     if (typeof zk.disconnect === 'function') {
@@ -202,47 +200,6 @@ router.get('/logs', (req, res) => {
     LIMIT 200
   `).all();
   res.json(rows);
-});
-
-pushRouter.post('/push', async (req, res) => {
-  const configuredToken = pushToken();
-  const providedToken = String(req.get('x-polaris-bridge-token') || req.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
-  if (!configuredToken || providedToken !== configuredToken) {
-    return res.status(401).json({ error: 'Invalid bridge token' });
-  }
-
-  const devices = await readJson('zkteco_devices.json', []);
-  const body = req.body || {};
-  const rows = rowsFromResult(body.logs || body.attendance || body.rows || []);
-  const endpoint = normalizeDeviceEndpoint(body.ip || body.host || '', body.port || 4370);
-  let device = devices.find(item => item.id === body.deviceId)
-    || devices.find(item => item.name === body.deviceName)
-    || devices.find(item => item.ip === endpoint.host && Number(item.port || 4370) === Number(endpoint.port || 4370));
-  if (!device) {
-    device = normalizeDevice({
-      id: body.deviceId,
-      name: body.deviceName || body.name || endpoint.host || 'Bridge Device',
-      ip: endpoint.host || body.deviceName || 'bridge',
-      port: endpoint.port || 4370,
-      enabled: true,
-      pollingInterval: 60,
-      punchLogic: 'latest_available'
-    });
-    devices.push(device);
-  }
-
-  const userIdMap = body.userIdMap ? objectToMap(body.userIdMap) : objectToMap(device.userIdMap);
-  const syncInfo = importAttendanceRows(rows, device, userIdMap);
-  if (body.userIdMap && Object.keys(body.userIdMap).length) device.userIdMap = body.userIdMap;
-  device.lastSyncAt = nowIso();
-  device.lastError = syncInfo.imported
-    ? ''
-    : `Bridge warning: ${syncInfo.total} attendance rows received, but 0 new punches imported. Latest received: ${syncInfo.latestPunchTime || 'none'}.`;
-  device.updatedAt = nowIso();
-  await writeJson('zkteco_devices.json', devices);
-  await emitAllDisplays();
-  await emitAdminStats();
-  res.json({ ok: true, ...syncInfo, deviceId: device.id, deviceName: device.name });
 });
 
 router.get('/timesheet', (req, res) => {
@@ -302,4 +259,4 @@ router.post('/sync', async (req, res) => {
   res.json({ ok: true, results });
 });
 
-module.exports = { router, pushRouter, syncEnabledDevices };
+module.exports = { router, syncEnabledDevices };
