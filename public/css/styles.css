@@ -250,6 +250,8 @@ code{color:#1d4ed8;background:#eff6ff;border-radius:6px;padding:.1rem .35rem}
 .display-body{--display-text-main:#dff7ff;--display-text-strong:#f4fbff;--display-text-soft:#9fc3dc;--display-text-muted:#7293ad;margin:0;width:100vw;height:100vh;overflow:hidden;background-color:#06101f;background:linear-gradient(135deg,#06101f 0%,#071a31 48%,#080f24 100%);color:var(--display-text-main);cursor:none;position:relative;transform:translateZ(0)}
 .display-body:before{content:"";position:fixed;inset:0;background:radial-gradient(circle at -8% 8%,var(--display-glow-primary,rgba(34,211,238,.24)) 0,rgba(34,211,238,0) 38%),radial-gradient(circle at 108% 84%,var(--display-glow-secondary,rgba(96,165,250,.2)) 0,rgba(96,165,250,0) 40%),linear-gradient(135deg,#06101f 0%,#071a31 48%,#080f24 100%);z-index:-2;pointer-events:none}
 .display-body:after{content:"";position:fixed;inset:0;background-image:linear-gradient(rgba(56,189,248,.038) 1px,transparent 1px),linear-gradient(90deg,rgba(56,189,248,.03) 1px,transparent 1px),linear-gradient(90deg,transparent 0 8%,rgba(56,189,248,.13) 8% 8.08%,transparent 8.08% 11%,rgba(56,189,248,.08) 11% 11.08%,transparent 11.08% 100%),linear-gradient(0deg,transparent 0 14%,rgba(56,189,248,.12) 14% 14.08%,transparent 14.08% 100%),radial-gradient(circle at 8% 14%,rgba(56,189,248,.35) 0 2px,transparent 3px),radial-gradient(circle at 92% 78%,rgba(96,165,250,.28) 0 2px,transparent 3px);background-size:42px 42px,42px 42px,520px 260px,420px 240px,280px 220px,320px 240px;background-position:0 0,0 0,left 6% top 8%,right 5% bottom 11%,left 9% top 16%,right 8% bottom 18%;opacity:.72;z-index:-1;pointer-events:none}
+.prayer-mode:before{background:radial-gradient(circle at -10% 0,rgba(56,189,248,.26),transparent 34%),radial-gradient(circle at 110% 100%,rgba(96,165,250,.22),transparent 34%),linear-gradient(135deg,#06101f 0%,#071a31 48%,#080f24 100%)}
+.prayer-mode:after{background-image:linear-gradient(rgba(56,189,248,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(56,189,248,.03) 1px,transparent 1px),repeating-conic-gradient(from 45deg at 0 0,rgba(125,211,252,.28) 0 12deg,transparent 12deg 24deg),repeating-conic-gradient(from 45deg at 100% 100%,rgba(96,165,250,.24) 0 12deg,transparent 12deg 24deg),radial-gradient(circle at 0 0,transparent 0 19vw,rgba(125,211,252,.46) 19.08vw 19.2vw,transparent 19.28vw),radial-gradient(circle at 100% 100%,transparent 0 19vw,rgba(96,165,250,.42) 19.08vw 19.2vw,transparent 19.28vw),radial-gradient(circle at 6% 10%,rgba(56,189,248,.42) 0 2px,transparent 3px),radial-gradient(circle at 94% 86%,rgba(125,211,252,.32) 0 2px,transparent 3px);background-size:42px 42px,42px 42px,180px 180px,180px 180px,100% 100%,100% 100%,280px 220px,320px 240px;background-position:0 0,0 0,left top,right bottom,0 0,0 0,left 7% top 12%,right 7% bottom 12%;opacity:.55}
 @keyframes gridDrift{from{transform:translateY(0)}to{transform:translateY(42px)}}
 .display-shell{width:100vw;height:100vh;display:grid;grid-template-rows:auto 1fr auto;padding:clamp(18px,4vh,54px) clamp(20px,5vw,86px);gap:clamp(12px,2vh,28px)}
 .display-top,.display-bottom{display:flex;justify-content:space-between;align-items:center;min-width:0}
@@ -480,7 +482,14 @@ code{color:#1d4ed8;background:#eff6ff;border-radius:6px;padding:.1rem .35rem}
 .org-employee-option{display:flex;gap:8px;align-items:flex-start;padding:9px;border:1px solid #dbe7f3;border-radius:10px;background:#fff}
 .org-employee-option span{display:grid;line-height:1.15}
 .org-employee-option small{color:#64748b}
-.prayer-board{width:100%;height:100%;display:grid;grid-template-rows:auto auto 1fr auto;gap:clamp(18px,3vh,36px);color:var(--display-text-main)}
+.prayer-profile-editor{display:grid;gap:12px}
+.prayer-profile-row{display:grid;grid-template-columns:minmax(105px,.7fr) minmax(82px,.45fr) minmax(82px,.45fr) minmax(130px,.7fr) minmax(180px,1fr) minmax(180px,1fr);gap:12px;align-items:start;padding:14px;border:1px solid #dbe7f3;border-radius:8px;background:#fff}
+.prayer-profile-row .form-label{font-size:.78rem;font-weight:800;color:#173466;margin-bottom:4px}
+.prayer-profile-title,.prayer-profile-toggle{min-height:38px;align-items:center}
+.prayer-audio-path{display:block;max-width:100%;overflow-wrap:anywhere;line-height:1.35;margin-top:4px}
+.prayer-board{position:relative;width:100%;height:100%;display:grid;grid-template-rows:auto auto 1fr auto;gap:clamp(18px,3vh,36px);color:var(--display-text-main)}
+.prayer-board:before{content:"";position:absolute;inset:clamp(8px,1vw,18px);border:1px solid rgba(125,211,252,.28);border-radius:8px;pointer-events:none;opacity:.7}
+.prayer-board:after{content:"";position:absolute;inset:auto -3vw -7vh auto;width:min(35vw,520px);aspect-ratio:1;border-radius:50%;background:repeating-conic-gradient(from 8deg,rgba(125,211,252,.12) 0 8deg,transparent 8deg 16deg),radial-gradient(circle,transparent 0 42%,rgba(56,189,248,.18) 42.5% 43%,transparent 43.5%);mask:radial-gradient(circle,transparent 0 35%,#000 35.5% 70%,transparent 70.5%);pointer-events:none;opacity:.45}
 .prayer-head,.prayer-footer{display:flex;align-items:center;justify-content:space-between;gap:24px}
 .prayer-city{color:var(--company-accent);font-weight:900;text-transform:uppercase;letter-spacing:.08em;font-size:clamp(18px,2vw,32px)}
 .prayer-head h1{margin:0;color:var(--display-text-strong);font-size:clamp(46px,7vw,118px);font-weight:950;line-height:.95}
@@ -533,6 +542,10 @@ code{color:#1d4ed8;background:#eff6ff;border-radius:6px;padding:.1rem .35rem}
   .container-fluid:has(.sidebar) main{width:100%;height:auto;flex:1 1 auto;overflow-y:auto}
   .dashboard-hero{grid-template-columns:1fr}
 }
+@media (max-width:1200px){
+  .prayer-profile-row{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .prayer-profile-title{grid-column:1/-1}
+}
 @media (max-width:768px){
   .container-fluid:has(.sidebar) .sidebar{min-height:auto}
   .dashboard-kpis{grid-template-columns:1fr}
@@ -559,4 +572,5 @@ code{color:#1d4ed8;background:#eff6ff;border-radius:6px;padding:.1rem .35rem}
   .employee-title{font-size:clamp(18px,4vw,32px)}
   .employee-dept{font-size:clamp(15px,3vw,24px)}
   .qr img{width:clamp(70px,16vw,96px);height:clamp(70px,16vw,96px)}
+  .prayer-profile-row{grid-template-columns:1fr}
 }

@@ -1388,18 +1388,18 @@ function prayerProfileForm(id = '') {
       <div class="col-md-6"><label class="form-label">School of Thought</label><select name="school" class="form-select"><option value="0" ${Number(profile.school) !== 1 ? 'selected' : ''}>Shafi / Standard</option><option value="1" ${Number(profile.school) === 1 ? 'selected' : ''}>Hanafi</option></select></div>
       <div class="col-12"><label class="form-label">Active Days</label><div class="d-flex flex-wrap gap-3">${dayOptions.map(([value, label]) => `<label class="form-check"><input name="enabledDays" type="checkbox" class="form-check-input" value="${value}" ${enabledDays.has(value) ? 'checked' : ''}><span>${label}</span></label>`).join('')}</div></div>
     </div>
-    <div class="table-card p-3 mt-3">
-      <table class="table mb-0"><thead><tr><th>Prayer</th><th>Adhan</th><th>Iqama</th><th>Iqama After</th><th>Adhan Audio</th><th>Iqama Audio</th></tr></thead><tbody>${prayerNames.map(name => {
+    <div class="prayer-profile-editor mt-3">
+      ${prayerNames.map(name => {
         const item = profile.prayers?.[name] || {};
-        return `<tr>
-          <td><label class="form-check"><input name="${name}Enabled" type="checkbox" class="form-check-input" ${item.enabled ? 'checked' : ''}><strong>${name}</strong></label></td>
-          <td><input name="${name}Adhan" type="checkbox" class="form-check-input" ${item.adhan === false ? '' : 'checked'}></td>
-          <td><input name="${name}Iqama" type="checkbox" class="form-check-input" ${item.iqama === false ? '' : 'checked'}></td>
-          <td><input name="${name}IqamaMinutes" type="number" min="0" class="form-control" value="${esc(item.iqamaMinutes || 20)}"></td>
-          <td><input name="${name}AudioFile" type="file" accept="audio/*" class="form-control">${item.audio ? `<input name="${name}Audio" type="hidden" value="${esc(item.audio)}"><small class="text-muted">${esc(item.audio)}</small>` : ''}</td>
-          <td><input name="${name}IqamaAudioFile" type="file" accept="audio/*" class="form-control">${item.iqamaAudio ? `<input name="${name}IqamaAudio" type="hidden" value="${esc(item.iqamaAudio)}"><small class="text-muted">${esc(item.iqamaAudio)}</small>` : ''}</td>
-        </tr>`;
-      }).join('')}</tbody></table>
+        return `<section class="prayer-profile-row">
+          <div class="prayer-profile-title"><label class="form-check"><input name="${name}Enabled" type="checkbox" class="form-check-input" ${item.enabled ? 'checked' : ''}><strong>${name}</strong></label></div>
+          <label class="form-check prayer-profile-toggle"><input name="${name}Adhan" type="checkbox" class="form-check-input" ${item.adhan === false ? '' : 'checked'}><span>Adhan</span></label>
+          <label class="form-check prayer-profile-toggle"><input name="${name}Iqama" type="checkbox" class="form-check-input" ${item.iqama === false ? '' : 'checked'}><span>Iqama</span></label>
+          <div><label class="form-label">Iqama After</label><div class="input-group"><input name="${name}IqamaMinutes" type="number" min="0" class="form-control" value="${esc(item.iqamaMinutes || 20)}"><span class="input-group-text">min</span></div></div>
+          <div><label class="form-label">Adhan Audio</label><input name="${name}AudioFile" type="file" accept="audio/*" class="form-control">${item.audio ? `<input name="${name}Audio" type="hidden" value="${esc(item.audio)}"><small class="text-muted prayer-audio-path">${esc(item.audio)}</small>` : ''}</div>
+          <div><label class="form-label">Iqama Audio</label><input name="${name}IqamaAudioFile" type="file" accept="audio/*" class="form-control">${item.iqamaAudio ? `<input name="${name}IqamaAudio" type="hidden" value="${esc(item.iqamaAudio)}"><small class="text-muted prayer-audio-path">${esc(item.iqamaAudio)}</small>` : ''}</div>
+        </section>`;
+      }).join('')}
     </div>
     <button class="btn btn-primary mt-3">Save</button>
   </form>`;
