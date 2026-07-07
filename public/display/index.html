@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Office Display</title>
-  <link href="/css/styles.css?v=20260630-display-tech-palette" rel="stylesheet">
+  <link href="/css/styles.css?v=20260707-prayer-module" rel="stylesheet">
 </head>
 <body class="display-body cursor-none">
   <div class="offline" id="offline"><div><h1>Connection Lost</h1><p>Trying to reconnect...</p></div></div>
@@ -63,6 +63,25 @@
         <div id="orgChartCanvas" class="org-chart-canvas"></div>
         <aside id="orgDetail" class="org-detail-panel" hidden></aside>
       </div>
+      <div id="prayerBlock" class="prayer-board" hidden>
+        <div class="prayer-head">
+          <div>
+            <div id="prayerCity" class="prayer-city"></div>
+            <h1 id="prayerTitle">Prayer Times</h1>
+          </div>
+          <div class="prayer-clock"><span id="prayerClock"></span><small id="prayerDate"></small></div>
+        </div>
+        <div class="prayer-now">
+          <span>Next Prayer</span>
+          <strong id="nextPrayerName">--</strong>
+          <em id="nextPrayerCountdown">--:--:--</em>
+        </div>
+        <div id="prayerTimesGrid" class="prayer-times-grid"></div>
+        <div class="prayer-footer">
+          <div class="overview-weather"><img id="prayerWeatherIcon" hidden alt=""><span id="prayerWeatherText"></span></div>
+          <div id="iqamaCountdown" class="iqama-countdown"></div>
+        </div>
+      </div>
       <div id="employeeBlock" class="employee-grid">
         <div class="portrait-wrap">
           <img id="empPhoto" class="employee-photo" hidden alt="">
@@ -88,7 +107,15 @@
       <div class="display-id" id="displayId"></div>
     </footer>
   </main>
+  <div id="prayerOverlay" class="prayer-overlay" hidden>
+    <div class="prayer-overlay-card">
+      <span id="prayerOverlayType"></span>
+      <strong id="prayerOverlayName"></strong>
+      <small id="prayerOverlayMessage"></small>
+    </div>
+  </div>
+  <audio id="prayerAudio"></audio>
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/js/display.js?v=20260630-display-tech-palette"></script>
+  <script src="/js/display.js?v=20260707-prayer-module"></script>
 </body>
 </html>

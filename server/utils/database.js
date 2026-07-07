@@ -132,6 +132,7 @@ function initDatabase() {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       employee_id TEXT,
+      prayer_profile_id TEXT,
       status TEXT NOT NULL DEFAULT 'Offline',
       last_seen TEXT,
       ip_address TEXT,
@@ -228,6 +229,24 @@ function initDatabase() {
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS prayer_profiles (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      city TEXT,
+      country TEXT,
+      state TEXT,
+      latitude TEXT,
+      longitude TEXT,
+      timezone TEXT,
+      method INTEGER NOT NULL DEFAULT 4,
+      school INTEGER NOT NULL DEFAULT 0,
+      enabled_days TEXT,
+      prayers TEXT,
+      weather_city TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS display_employee_assignments (
       display_id TEXT NOT NULL,
       employee_id TEXT NOT NULL,
@@ -250,6 +269,7 @@ function initDatabase() {
   ensureColumn('users', 'permissions', 'TEXT');
   ensureColumn('departments', 'manager_employee_id', 'TEXT');
   ensureColumn('displays', 'display_mode', "TEXT NOT NULL DEFAULT 'single'");
+  ensureColumn('displays', 'prayer_profile_id', 'TEXT');
   ensureColumn('displays', 'display_group', 'TEXT');
   ensureColumn('displays', 'room_number', 'TEXT');
   ensureColumn('displays', 'show_room_number', 'INTEGER NOT NULL DEFAULT 0');
@@ -347,13 +367,14 @@ function migrateJsonOnce() {
 
     const insertDisplay = db.prepare(`
       INSERT OR IGNORE INTO displays
-      (id, name, employee_id, display_mode, display_group, room_number, show_room_number, show_phone_number, cubicle_number, show_cubicle_number, rotate_company_profiles, rotation_interval_seconds, rotation_company_profile_ids, overview_show_company_name, overview_department_order, overview_department_layout, overview_employee_order, overview_employee_order_by_department, org_chart_root_mode, org_chart_show_photos, org_chart_animation_enabled, org_chart_auto_reset_seconds, org_chart_manager_focus_seconds, org_chart_selected_employee_ids, org_chart_included_department_ids, status, last_seen, ip_address, resolution, created_at, updated_at)
-      VALUES (@id, @name, @employeeId, @displayMode, @displayGroup, @roomNumber, @showRoomNumber, @showPhoneNumber, @cubicleNumber, @showCubicleNumber, @rotateCompanyProfiles, @rotationIntervalSeconds, @rotationCompanyProfileIds, @overviewShowCompanyName, @overviewDepartmentOrder, @overviewDepartmentLayout, @overviewEmployeeOrder, @overviewEmployeeOrderByDepartment, @orgChartRootMode, @orgChartShowPhotos, @orgChartAnimationEnabled, @orgChartAutoResetSeconds, @orgChartManagerFocusSeconds, @orgChartSelectedEmployeeIds, @orgChartIncludedDepartmentIds, @status, @lastSeen, @ipAddress, @resolution, @createdAt, @updatedAt)
+      (id, name, employee_id, prayer_profile_id, display_mode, display_group, room_number, show_room_number, show_phone_number, cubicle_number, show_cubicle_number, rotate_company_profiles, rotation_interval_seconds, rotation_company_profile_ids, overview_show_company_name, overview_department_order, overview_department_layout, overview_employee_order, overview_employee_order_by_department, org_chart_root_mode, org_chart_show_photos, org_chart_animation_enabled, org_chart_auto_reset_seconds, org_chart_manager_focus_seconds, org_chart_selected_employee_ids, org_chart_included_department_ids, status, last_seen, ip_address, resolution, created_at, updated_at)
+      VALUES (@id, @name, @employeeId, @prayerProfileId, @displayMode, @displayGroup, @roomNumber, @showRoomNumber, @showPhoneNumber, @cubicleNumber, @showCubicleNumber, @rotateCompanyProfiles, @rotationIntervalSeconds, @rotationCompanyProfileIds, @overviewShowCompanyName, @overviewDepartmentOrder, @overviewDepartmentLayout, @overviewEmployeeOrder, @overviewEmployeeOrderByDepartment, @orgChartRootMode, @orgChartShowPhotos, @orgChartAnimationEnabled, @orgChartAutoResetSeconds, @orgChartManagerFocusSeconds, @orgChartSelectedEmployeeIds, @orgChartIncludedDepartmentIds, @status, @lastSeen, @ipAddress, @resolution, @createdAt, @updatedAt)
     `);
     displays.forEach(d => insertDisplay.run({
       id: d.id,
       name: d.name || d.id,
       employeeId: d.employeeId || null,
+      prayerProfileId: d.prayerProfileId || null,
       displayMode: d.displayMode || 'single',
       displayGroup: d.displayGroup || '',
       roomNumber: d.roomNumber || '',
@@ -841,6 +862,7 @@ function mapDisplay(row) {
     id: row.id,
     name: row.name || '',
     employeeId: row.employee_id || '',
+    prayerProfileId: row.prayer_profile_id || '',
     displayMode: row.display_mode || 'single',
     displayGroup: row.display_group || '',
     roomNumber: row.room_number || '',
@@ -905,6 +927,26 @@ function mapDevice(row) {
   };
 }
 
+function mapPrayerProfile(row) {
+  return row && {
+    id: row.id,
+    name: row.name || '',
+    city: row.city || '',
+    country: row.country || '',
+    state: row.state || '',
+    latitude: row.latitude || '',
+    longitude: row.longitude || '',
+    timezone: row.timezone || '',
+    method: Number(row.method || 4),
+    school: Number(row.school || 0),
+    enabledDays: parseJson(row.enabled_days, [0, 1, 2, 3, 4, 5, 6]),
+    prayers: parseJson(row.prayers, {}),
+    weatherCity: row.weather_city || row.city || '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
 async function readJson(name, fallback) {
   if (name === 'employees.json') return db.prepare('SELECT * FROM employees ORDER BY name COLLATE NOCASE').all().map(mapEmployee);
   if (name === 'displays.json') return db.prepare('SELECT * FROM displays ORDER BY name COLLATE NOCASE').all().map(mapDisplay);
@@ -917,6 +959,7 @@ async function readJson(name, fallback) {
     return active ? companyProfileToSettings(active, settings) : settings;
   }
   if (name === 'zkteco_devices.json') return db.prepare('SELECT * FROM zkteco_devices ORDER BY name COLLATE NOCASE').all().map(mapDevice);
+  if (name === 'prayer_profiles.json') return db.prepare('SELECT * FROM prayer_profiles ORDER BY name COLLATE NOCASE').all().map(mapPrayerProfile);
   return fallback;
 }
 
@@ -985,11 +1028,12 @@ async function writeJson(name, value) {
   if (name === 'displays.json') {
     const tx = db.transaction(items => {
       const stmt = db.prepare(`
-        INSERT INTO displays (id, name, employee_id, display_mode, display_group, room_number, show_room_number, show_phone_number, cubicle_number, show_cubicle_number, rotate_company_profiles, rotation_interval_seconds, rotation_company_profile_ids, overview_show_company_name, overview_department_order, overview_department_layout, overview_employee_order, overview_employee_order_by_department, org_chart_root_mode, org_chart_show_photos, org_chart_animation_enabled, org_chart_auto_reset_seconds, org_chart_manager_focus_seconds, org_chart_selected_employee_ids, org_chart_included_department_ids, status, last_seen, ip_address, resolution, created_at, updated_at)
-        VALUES (@id, @name, @employeeId, @displayMode, @displayGroup, @roomNumber, @showRoomNumber, @showPhoneNumber, @cubicleNumber, @showCubicleNumber, @rotateCompanyProfiles, @rotationIntervalSeconds, @rotationCompanyProfileIds, @overviewShowCompanyName, @overviewDepartmentOrder, @overviewDepartmentLayout, @overviewEmployeeOrder, @overviewEmployeeOrderByDepartment, @orgChartRootMode, @orgChartShowPhotos, @orgChartAnimationEnabled, @orgChartAutoResetSeconds, @orgChartManagerFocusSeconds, @orgChartSelectedEmployeeIds, @orgChartIncludedDepartmentIds, @status, @lastSeen, @ipAddress, @resolution, @createdAt, @updatedAt)
+        INSERT INTO displays (id, name, employee_id, prayer_profile_id, display_mode, display_group, room_number, show_room_number, show_phone_number, cubicle_number, show_cubicle_number, rotate_company_profiles, rotation_interval_seconds, rotation_company_profile_ids, overview_show_company_name, overview_department_order, overview_department_layout, overview_employee_order, overview_employee_order_by_department, org_chart_root_mode, org_chart_show_photos, org_chart_animation_enabled, org_chart_auto_reset_seconds, org_chart_manager_focus_seconds, org_chart_selected_employee_ids, org_chart_included_department_ids, status, last_seen, ip_address, resolution, created_at, updated_at)
+        VALUES (@id, @name, @employeeId, @prayerProfileId, @displayMode, @displayGroup, @roomNumber, @showRoomNumber, @showPhoneNumber, @cubicleNumber, @showCubicleNumber, @rotateCompanyProfiles, @rotationIntervalSeconds, @rotationCompanyProfileIds, @overviewShowCompanyName, @overviewDepartmentOrder, @overviewDepartmentLayout, @overviewEmployeeOrder, @overviewEmployeeOrderByDepartment, @orgChartRootMode, @orgChartShowPhotos, @orgChartAnimationEnabled, @orgChartAutoResetSeconds, @orgChartManagerFocusSeconds, @orgChartSelectedEmployeeIds, @orgChartIncludedDepartmentIds, @status, @lastSeen, @ipAddress, @resolution, @createdAt, @updatedAt)
         ON CONFLICT(id) DO UPDATE SET
           name = excluded.name,
           employee_id = excluded.employee_id,
+          prayer_profile_id = excluded.prayer_profile_id,
           display_mode = excluded.display_mode,
           display_group = excluded.display_group,
           room_number = excluded.room_number,
@@ -1022,6 +1066,7 @@ async function writeJson(name, value) {
         id: d.id,
         name: d.name || d.id,
         employeeId: d.employeeId || null,
+        prayerProfileId: d.prayerProfileId || null,
         displayMode: d.displayMode || 'single',
         displayGroup: d.displayGroup || '',
         roomNumber: d.roomNumber || '',
@@ -1115,6 +1160,34 @@ async function writeJson(name, value) {
     tx(value || []);
     return value;
   }
+  if (name === 'prayer_profiles.json') {
+    const tx = db.transaction(items => {
+      db.prepare('DELETE FROM prayer_profiles').run();
+      const stmt = db.prepare(`
+        INSERT INTO prayer_profiles (id, name, city, country, state, latitude, longitude, timezone, method, school, enabled_days, prayers, weather_city, created_at, updated_at)
+        VALUES (@id, @name, @city, @country, @state, @latitude, @longitude, @timezone, @method, @school, @enabledDays, @prayers, @weatherCity, @createdAt, @updatedAt)
+      `);
+      items.forEach(profile => stmt.run({
+        id: profile.id,
+        name: profile.name || 'Prayer Profile',
+        city: profile.city || '',
+        country: profile.country || '',
+        state: profile.state || '',
+        latitude: profile.latitude || '',
+        longitude: profile.longitude || '',
+        timezone: profile.timezone || '',
+        method: Number(profile.method || 4),
+        school: Number(profile.school || 0),
+        enabledDays: json(Array.isArray(profile.enabledDays) ? profile.enabledDays : [0, 1, 2, 3, 4, 5, 6]),
+        prayers: json(profile.prayers || {}),
+        weatherCity: profile.weatherCity || profile.city || '',
+        createdAt: profile.createdAt || stamp,
+        updatedAt: profile.updatedAt || stamp
+      }));
+    });
+    tx(value || []);
+    return value;
+  }
   return value;
 }
 
@@ -1148,6 +1221,7 @@ module.exports = {
   mapDisplay,
   mapUser,
   mapDevice,
+  mapPrayerProfile,
   mapCompanyProfile,
   listCompanyProfiles,
   getCompanyProfile,

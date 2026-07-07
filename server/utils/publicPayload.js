@@ -3,6 +3,7 @@ const { readJson } = require('./dataStore');
 const { db, listCompanyProfiles } = require('./database');
 const { employeeVCard, companyVCard, hasCompanyContact } = require('./vcard');
 const { effectiveEmployeeStatus } = require('./status');
+const { profilePrayerState } = require('./prayer');
 
 function publicSettings(settings) {
   const clean = JSON.parse(JSON.stringify(settings || {}));
@@ -169,6 +170,28 @@ async function buildDisplayPayload(displayId, includeQr = true) {
         topEmployees: employeesForChart.filter(isOrgLeader).map(publicOrgEmployee),
         departments: orgChartDepartments(employeesForChart, departments, display)
       },
+      rotationCompanies: overviewRotationProfiles(display)
+    };
+  }
+  if (display.displayMode === 'prayer') {
+    const profiles = await readJson('prayer_profiles.json', []);
+    const profile = profiles.find(item => item.id === display.prayerProfileId) || profiles[0] || null;
+    let prayer = null;
+    if (profile) {
+      try {
+        prayer = await profilePrayerState(profile);
+      } catch (err) {
+        prayer = { error: err.message, timings: {}, events: [], next: null };
+      }
+    }
+    return {
+      display,
+      employees: [],
+      employee: null,
+      settings: publicSettings(settings),
+      weather: settings.weather?.data || null,
+      qr: '',
+      prayer: profile ? { profile, ...prayer } : null,
       rotationCompanies: overviewRotationProfiles(display)
     };
   }

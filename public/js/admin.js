@@ -5,7 +5,7 @@ const modal = new bootstrap.Modal(modalEl);
 const socket = io();
 
 const statuses = ['Available', 'Not Available'];
-let state = { employees: [], displays: [], departments: [], settings: {}, users: [], devices: [], timesheet: null, companyProfiles: [], dashboard: null, me: null };
+let state = { employees: [], displays: [], departments: [], settings: {}, users: [], devices: [], timesheet: null, companyProfiles: [], prayerProfiles: [], dashboard: null, me: null };
 
 const permissionOptions = [
   ['dashboard.view', 'Dashboard'],
@@ -15,6 +15,7 @@ const permissionOptions = [
   ['displays.manage', 'Add/Edit Displays'],
   ['companyProfiles.manage', 'Edit Company Profiles'],
   ['weather.manage', 'Edit Weather'],
+  ['prayer.manage', 'Edit Prayer Profiles'],
   ['zkteco.manage', 'Manage Fingerprint Devices'],
   ['users.manage', 'Create Users & Access Rights'],
   ['display.access', 'Open Displays / Setup']
@@ -38,11 +39,12 @@ const pagePermissions = {
   'company-profiles': 'companyProfiles.manage',
   'company-profile': 'companyProfiles.manage',
   weather: 'weather.manage',
+  prayer: 'prayer.manage',
   zkteco: 'zkteco.manage',
   users: 'users.manage',
   'about-developer': null
 };
-const navPageKeys = ['dashboard', 'employees', 'displays', 'company-profiles', 'weather', 'zkteco', 'users', 'about-developer'];
+const navPageKeys = ['dashboard', 'employees', 'displays', 'company-profiles', 'weather', 'prayer', 'zkteco', 'users', 'about-developer'];
 
 const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function randomSecret(bytes = 32) {
@@ -223,7 +225,7 @@ async function load() {
   const currentPermissions = permissionsFor(currentUser);
   const can = permission => currentPermissions.includes(permission);
   const timesheetDate = sessionStorage.getItem('polaris_timesheet_date') || new Date().toISOString().slice(0, 10);
-  const [dashboardData, employees, displays, departments, settings, users, devices, timesheet, companyProfiles] = await Promise.all([
+  const [dashboardData, employees, displays, departments, settings, users, devices, timesheet, companyProfiles, prayerProfiles] = await Promise.all([
     can('dashboard.view') ? api('/api/dashboard') : Promise.resolve(null),
     can('employees.view') || can('employeeStatus.view') || can('employees.manage') || can('displays.manage') ? api('/api/employees') : Promise.resolve([]),
     can('displays.manage') ? api('/api/displays') : Promise.resolve([]),
@@ -232,7 +234,8 @@ async function load() {
     can('users.manage') ? api('/api/users') : Promise.resolve([]),
     can('zkteco.manage') ? api('/api/zkteco/devices') : Promise.resolve([]),
     can('employees.manage') || can('employeeStatus.view') ? api(`/api/timesheet?date=${encodeURIComponent(timesheetDate)}`) : Promise.resolve(null),
-    can('companyProfiles.manage') ? api('/api/company-profiles') : Promise.resolve([])
+    can('companyProfiles.manage') ? api('/api/company-profiles') : Promise.resolve([]),
+    can('prayer.manage') || can('displays.manage') ? api('/api/prayer/profiles') : Promise.resolve([])
   ]);
   state = {
     employees: Array.isArray(employees) ? employees : [],
@@ -243,6 +246,7 @@ async function load() {
     devices: Array.isArray(devices) ? devices : [],
     timesheet: timesheet || null,
     companyProfiles: Array.isArray(companyProfiles) ? companyProfiles : [],
+    prayerProfiles: Array.isArray(prayerProfiles) ? prayerProfiles : [],
     dashboard: dashboardData || null,
     me: currentUser
   };
@@ -272,7 +276,7 @@ async function route() {
       page = fallback;
     }
     document.body.dataset.adminPage = page;
-    ({ dashboard, employees, displays, 'company-profiles': renderCompanyProfiles, 'company-profile': renderCompanyProfiles, weather, zkteco, users, 'about-developer': aboutDeveloper }[page] || dashboard)();
+    ({ dashboard, employees, displays, 'company-profiles': renderCompanyProfiles, 'company-profile': renderCompanyProfiles, weather, prayer, zkteco, users, 'about-developer': aboutDeveloper }[page] || dashboard)();
   } catch (err) {
     content.innerHTML = `<div class="alert alert-danger"><h5>Admin Error</h5><p>${esc(err.message)}</p></div>`;
   }
@@ -1043,7 +1047,7 @@ function displayForm(id = '') {
   $('#modalBody').innerHTML = `<form id="displayForm">
     <label class="form-label">Display Name</label><input name="name" class="form-control mb-3" required value="${esc(d.name)}">
     <label class="form-label">Display ID</label><input name="id" class="form-control mb-3" ${id ? 'readonly' : ''} required value="${esc(d.id)}">
-    <label class="form-label">Display Mode</label><select name="displayMode" id="displayMode" class="form-select mb-3"><option value="single" ${!['overview', 'orgchart'].includes(d.displayMode) ? 'selected' : ''}>Single Employee Sign</option><option value="overview" ${d.displayMode === 'overview' ? 'selected' : ''}>Large Screen Employee Board</option><option value="orgchart" ${d.displayMode === 'orgchart' ? 'selected' : ''}>Organization Chart</option></select>
+    <label class="form-label">Display Mode</label><select name="displayMode" id="displayMode" class="form-select mb-3"><option value="single" ${!['overview', 'orgchart', 'prayer'].includes(d.displayMode) ? 'selected' : ''}>Single Employee Sign</option><option value="overview" ${d.displayMode === 'overview' ? 'selected' : ''}>Large Screen Employee Board</option><option value="orgchart" ${d.displayMode === 'orgchart' ? 'selected' : ''}>Organization Chart</option><option value="prayer" ${d.displayMode === 'prayer' ? 'selected' : ''}>Prayer Times Screen</option></select>
     <label class="form-label">Display Group</label><input name="displayGroup" class="form-control mb-3" placeholder="Open Area, Women Section" value="${esc(d.displayGroup)}">
     <div class="row g-3 mb-3">
       <div class="col-md-6"><label class="form-label">Room Number</label><input name="roomNumber" class="form-control" placeholder="example: 102" value="${esc(d.roomNumber)}"></div>
@@ -1097,6 +1101,7 @@ function displayForm(id = '') {
       <div class="form-text mt-2">Reporting relationships are managed in each employee profile through Manager / Reports To.</div>
     </div>
     <div id="singleEmployeeFields"><label class="form-label">Assigned Employee</label><select name="employeeId" class="form-select mb-3"><option value="">None</option>${state.employees.map(e => `<option value="${e.id}" ${d.employeeId === e.id ? 'selected' : ''}>${esc(e.name)}</option>`).join('')}</select></div>
+    <div id="prayerDisplayFields"><label class="form-label">Prayer Profile</label><select name="prayerProfileId" class="form-select mb-3"><option value="">Select profile</option>${state.prayerProfiles.map(profile => `<option value="${esc(profile.id)}" ${d.prayerProfileId === profile.id ? 'selected' : ''}>${esc(profile.name)}${profile.city ? ` - ${esc(profile.city)}` : ''}</option>`).join('')}</select></div>
     <button class="btn btn-primary">Save</button></form>`;
   modal.show();
   const syncOverviewRotationFields = () => {
@@ -1106,6 +1111,7 @@ function displayForm(id = '') {
     $('#overviewRotationFields').hidden = !isOverview;
     $('#orgChartFields').hidden = !isOrgChart;
     $('#singleEmployeeFields').hidden = mode !== 'single';
+    $('#prayerDisplayFields').hidden = mode !== 'prayer';
     document.querySelectorAll('.single-display-option').forEach(item => { item.hidden = mode !== 'single'; });
   };
   $('#displayMode').onchange = syncOverviewRotationFields;
@@ -1139,6 +1145,7 @@ function displayForm(id = '') {
       data.overviewDepartmentOrder = [];
       data.overviewDepartmentLayout = [];
     }
+    if (data.displayMode !== 'prayer') data.prayerProfileId = '';
     if (data.displayMode !== 'orgchart') {
       data.orgChartRootMode = 'department_managers';
       data.orgChartShowPhotos = true;
@@ -1336,6 +1343,76 @@ async function weather() {
     weather();
   };
 }
+
+const prayerNames = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+const dayOptions = [['0', 'Sun'], ['1', 'Mon'], ['2', 'Tue'], ['3', 'Wed'], ['4', 'Thu'], ['5', 'Fri'], ['6', 'Sat']];
+
+function prayer() {
+  setTitle('Prayer Profiles');
+  content.innerHTML = `<button class="btn btn-primary btn-rounded mb-3" id="addPrayerProfile"><i class="bi bi-plus-lg"></i> Add Profile</button><div class="card table-card"><table class="table mb-0"><thead><tr><th>Name</th><th>Location</th><th>School</th><th>Days</th><th>Prayers</th><th></th></tr></thead><tbody>${state.prayerProfiles.map(profile => {
+    const prayers = prayerNames.filter(name => profile.prayers?.[name]?.enabled).join(', ');
+    const days = (profile.enabledDays || []).map(day => dayOptions.find(([value]) => Number(value) === Number(day))?.[1] || day).join(', ');
+    return `<tr><td>${esc(profile.name)}</td><td>${esc(profile.city || profile.latitude || '')}</td><td>${Number(profile.school) === 1 ? 'Hanafi' : 'Shafi'}</td><td>${esc(days)}</td><td>${esc(prayers || '-')}</td><td class="text-end"><button class="btn btn-sm btn-outline-primary edit-prayer-profile" data-id="${esc(profile.id)}"><i class="bi bi-pencil"></i></button> <button class="btn btn-sm btn-outline-danger del-prayer-profile" data-id="${esc(profile.id)}"><i class="bi bi-trash"></i></button></td></tr>`;
+  }).join('')}</tbody></table></div>`;
+  $('#addPrayerProfile').onclick = () => prayerProfileForm();
+  document.querySelectorAll('.edit-prayer-profile').forEach(button => button.onclick = () => prayerProfileForm(button.dataset.id));
+  document.querySelectorAll('.del-prayer-profile').forEach(button => button.onclick = async () => { if (!await confirmDelete('Delete Prayer Profile?')) return; await api(`/api/prayer/profiles/${button.dataset.id}`, { method: 'DELETE' }); toast('Prayer profile deleted'); route(); });
+}
+
+function prayerProfileForm(id = '') {
+  const profile = state.prayerProfiles.find(item => item.id === id) || {
+    name: '',
+    city: 'Riyadh',
+    country: 'Saudi Arabia',
+    state: '',
+    latitude: '',
+    longitude: '',
+    timezone: 'Asia/Riyadh',
+    method: 4,
+    school: 0,
+    enabledDays: [0, 1, 2, 3, 4, 5, 6],
+    prayers: {}
+  };
+  const enabledDays = new Set((profile.enabledDays || []).map(String));
+  $('#modalTitle').textContent = id ? 'Edit Prayer Profile' : 'Add Prayer Profile';
+  $('#modalBody').innerHTML = `<form id="prayerProfileForm" enctype="multipart/form-data">
+    <div class="row g-3">
+      <div class="col-md-6"><label class="form-label">Profile Name</label><input name="name" class="form-control" value="${esc(profile.name)}" required></div>
+      <div class="col-md-6"><label class="form-label">City</label><input name="city" class="form-control" value="${esc(profile.city)}"></div>
+      <div class="col-md-6"><label class="form-label">Country</label><input name="country" class="form-control" value="${esc(profile.country)}"></div>
+      <div class="col-md-6"><label class="form-label">State</label><input name="state" class="form-control" value="${esc(profile.state)}"></div>
+      <div class="col-md-4"><label class="form-label">Latitude</label><input name="latitude" class="form-control" value="${esc(profile.latitude)}"></div>
+      <div class="col-md-4"><label class="form-label">Longitude</label><input name="longitude" class="form-control" value="${esc(profile.longitude)}"></div>
+      <div class="col-md-4"><label class="form-label">Timezone</label><input name="timezone" class="form-control" value="${esc(profile.timezone || 'Asia/Riyadh')}"></div>
+      <div class="col-md-6"><label class="form-label">Calculation Method</label><select name="method" class="form-select"><option value="4" ${Number(profile.method) === 4 ? 'selected' : ''}>Umm Al-Qura, Makkah</option><option value="8" ${Number(profile.method) === 8 ? 'selected' : ''}>Gulf Region</option><option value="3" ${Number(profile.method) === 3 ? 'selected' : ''}>Muslim World League</option><option value="10" ${Number(profile.method) === 10 ? 'selected' : ''}>Qatar</option><option value="9" ${Number(profile.method) === 9 ? 'selected' : ''}>Kuwait</option></select></div>
+      <div class="col-md-6"><label class="form-label">School of Thought</label><select name="school" class="form-select"><option value="0" ${Number(profile.school) !== 1 ? 'selected' : ''}>Shafi / Standard</option><option value="1" ${Number(profile.school) === 1 ? 'selected' : ''}>Hanafi</option></select></div>
+      <div class="col-12"><label class="form-label">Active Days</label><div class="d-flex flex-wrap gap-3">${dayOptions.map(([value, label]) => `<label class="form-check"><input name="enabledDays" type="checkbox" class="form-check-input" value="${value}" ${enabledDays.has(value) ? 'checked' : ''}><span>${label}</span></label>`).join('')}</div></div>
+    </div>
+    <div class="table-card p-3 mt-3">
+      <table class="table mb-0"><thead><tr><th>Prayer</th><th>Adhan</th><th>Iqama</th><th>Iqama After</th><th>Adhan Audio</th><th>Iqama Audio</th></tr></thead><tbody>${prayerNames.map(name => {
+        const item = profile.prayers?.[name] || {};
+        return `<tr>
+          <td><label class="form-check"><input name="${name}Enabled" type="checkbox" class="form-check-input" ${item.enabled ? 'checked' : ''}><strong>${name}</strong></label></td>
+          <td><input name="${name}Adhan" type="checkbox" class="form-check-input" ${item.adhan === false ? '' : 'checked'}></td>
+          <td><input name="${name}Iqama" type="checkbox" class="form-check-input" ${item.iqama === false ? '' : 'checked'}></td>
+          <td><input name="${name}IqamaMinutes" type="number" min="0" class="form-control" value="${esc(item.iqamaMinutes || 20)}"></td>
+          <td><input name="${name}AudioFile" type="file" accept="audio/*" class="form-control">${item.audio ? `<input name="${name}Audio" type="hidden" value="${esc(item.audio)}"><small class="text-muted">${esc(item.audio)}</small>` : ''}</td>
+          <td><input name="${name}IqamaAudioFile" type="file" accept="audio/*" class="form-control">${item.iqamaAudio ? `<input name="${name}IqamaAudio" type="hidden" value="${esc(item.iqamaAudio)}"><small class="text-muted">${esc(item.iqamaAudio)}</small>` : ''}</td>
+        </tr>`;
+      }).join('')}</tbody></table>
+    </div>
+    <button class="btn btn-primary mt-3">Save</button>
+  </form>`;
+  modal.show();
+  $('#prayerProfileForm').onsubmit = async event => {
+    event.preventDefault();
+    await api(id ? `/api/prayer/profiles/${id}` : '/api/prayer/profiles', { method: id ? 'PUT' : 'POST', body: new FormData(event.target) });
+    modal.hide();
+    toast('Prayer profile saved');
+    route();
+  };
+}
+
 function zkteco() {
   setTitle('ZKTeco');
   content.innerHTML = `<button class="btn btn-primary btn-rounded mb-3" id="addDeviceBtn"><i class="bi bi-plus-lg"></i> Add Device</button> <button class="btn btn-outline-secondary btn-rounded mb-3" id="syncBtn"><i class="bi bi-arrow-repeat"></i> Sync Now</button><div class="card table-card"><table class="table mb-0"><thead><tr><th>Device Name</th><th>Location</th><th>Secret</th><th>Last Sync</th><th>Error</th><th></th></tr></thead><tbody>${state.devices.map(d => `<tr><td>${esc(d.name)}</td><td>${esc(d.location || '')}</td><td><code>${esc(d.secret || '')}</code> <button class="btn btn-sm btn-outline-secondary copy-device-secret" data-secret="${esc(d.secret || '')}" title="Copy secret"><i class="bi bi-clipboard"></i></button></td><td>${esc(localDateTime(d.lastSyncAt))}</td><td>${esc(d.lastError || '')}</td><td class="text-end"><button class="btn btn-sm btn-outline-primary edit-device" data-id="${d.id}"><i class="bi bi-pencil"></i></button> <button class="btn btn-sm btn-outline-danger del-device" data-id="${d.id}"><i class="bi bi-trash"></i></button></td></tr>`).join('')}</tbody></table></div>`;

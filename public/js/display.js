@@ -3,6 +3,9 @@ const socket = io({ reconnection: true, reconnectionDelay: 1000, reconnectionDel
 const $ = id => document.getElementById(id);
 let settings = {};
 let weather = null;
+let currentPayload = null;
+let prayerState = null;
+let prayerOverlayTimer = null;
 let overviewRotationTimer = null;
 let overviewRotationIndex = 0;
 let orgState = {
@@ -125,9 +128,11 @@ socket.io.on('reconnect', () => loadData().catch(() => $('offline').classList.ad
 socket.on('display-data', render);
 socket.on('weather-update', data => { weather = data; renderWeather(); });
 socket.on('company-profile-changed', () => loadData().catch(() => $('offline').classList.add('show')));
+socket.on('prayer-event', showPrayerEvent);
 
 function render(payload) {
   if (!payload) return;
+  currentPayload = payload;
   settings = payload.settings || settings;
   weather = payload.weather || (settings.weather && settings.weather.data) || weather;
   const company = settings.company || {};
@@ -147,6 +152,8 @@ function render(payload) {
   if (payload.display && payload.display.displayMode === 'overview') {
     $('shell').classList.add('overview-mode');
     $('shell').classList.remove('org-chart-mode');
+    $('shell').classList.remove('prayer-mode');
+    $('prayerBlock').hidden = true;
     $('orgChartBlock').hidden = true;
     renderOverview(payload);
     renderWeather();
@@ -157,10 +164,12 @@ function render(payload) {
   if (payload.display && payload.display.displayMode === 'orgchart') {
     $('shell').classList.add('org-chart-mode');
     $('shell').classList.remove('overview-mode');
+    $('shell').classList.remove('prayer-mode');
     if (overviewRotationTimer) clearInterval(overviewRotationTimer);
     overviewRotationTimer = null;
     $('overviewBlock').hidden = true;
     $('employeeBlock').hidden = true;
+    $('prayerBlock').hidden = true;
     $('empty').hidden = true;
     renderOrgChart(payload);
     renderWeather();
@@ -168,8 +177,25 @@ function render(payload) {
     return;
   }
 
+  if (payload.display && payload.display.displayMode === 'prayer') {
+    $('shell').classList.add('prayer-mode');
+    $('shell').classList.remove('overview-mode');
+    $('shell').classList.remove('org-chart-mode');
+    if (overviewRotationTimer) clearInterval(overviewRotationTimer);
+    overviewRotationTimer = null;
+    $('overviewBlock').hidden = true;
+    $('orgChartBlock').hidden = true;
+    $('employeeBlock').hidden = true;
+    $('empty').hidden = true;
+    renderPrayerBoard(payload);
+    renderWeather();
+    tick();
+    return;
+  }
+
   $('shell').classList.remove('overview-mode');
   $('shell').classList.remove('org-chart-mode');
+  $('shell').classList.remove('prayer-mode');
   if (overviewRotationTimer) clearInterval(overviewRotationTimer);
   overviewRotationTimer = null;
   if (orgState.timer) clearTimeout(orgState.timer);
@@ -182,6 +208,7 @@ function render(payload) {
   const employee = payload.employee;
   $('overviewBlock').hidden = true;
   $('orgChartBlock').hidden = true;
+  $('prayerBlock').hidden = true;
   $('employeeBlock').hidden = !employee;
   $('empty').hidden = !!employee;
   if (employee) {
@@ -910,27 +937,81 @@ function renderWeather() {
     $('weatherText').textContent = '';
     $('overviewWeatherText').textContent = '';
     $('orgWeatherText').textContent = '';
+    $('prayerWeatherText').textContent = '';
     $('weatherIcon').hidden = true;
     $('overviewWeatherIcon').hidden = true;
     $('orgWeatherIcon').hidden = true;
+    $('prayerWeatherIcon').hidden = true;
     return;
   }
   const unit = weather.units === 'imperial' ? '°F' : '°C';
   $('weatherText').textContent = `${weather.temperature}${unit}`;
   $('overviewWeatherText').textContent = `${weather.temperature}${unit}`;
   $('orgWeatherText').textContent = `${weather.temperature}${unit}`;
+  $('prayerWeatherText').textContent = `${weather.temperature}${unit}`;
   if (weather.icon) {
     $('weatherIcon').src = weather.icon;
     $('overviewWeatherIcon').src = weather.icon;
     $('orgWeatherIcon').src = weather.icon;
+    $('prayerWeatherIcon').src = weather.icon;
     $('weatherIcon').hidden = false;
     $('overviewWeatherIcon').hidden = false;
     $('orgWeatherIcon').hidden = false;
+    $('prayerWeatherIcon').hidden = false;
   } else {
     $('weatherIcon').hidden = true;
     $('overviewWeatherIcon').hidden = true;
     $('orgWeatherIcon').hidden = true;
+    $('prayerWeatherIcon').hidden = true;
   }
+}
+
+function renderPrayerBoard(payload) {
+  prayerState = payload.prayer || null;
+  const profile = prayerState?.profile || {};
+  $('prayerBlock').hidden = false;
+  $('prayerCity').textContent = [profile.city, profile.country].filter(Boolean).join(', ');
+  $('prayerTitle').textContent = profile.name || 'Prayer Times';
+  const timings = prayerState?.timings || {};
+  const names = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+  $('prayerTimesGrid').innerHTML = names.map(name => `<article class="prayer-time-card"><span>${safeText(name)}</span><strong>${safeText(timings[name] || '--:--')}</strong></article>`).join('');
+  updatePrayerCountdowns();
+}
+
+function formatDuration(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function updatePrayerCountdowns() {
+  if (!prayerState) return;
+  const now = Date.now();
+  const events = Array.isArray(prayerState.events) ? prayerState.events : [];
+  const next = events.find(event => new Date(event.at).getTime() >= now);
+  $('nextPrayerName').textContent = next ? `${next.prayer} ${next.type === 'iqama' ? 'Iqama' : 'Adhan'}` : '--';
+  $('nextPrayerCountdown').textContent = next ? formatDuration(new Date(next.at).getTime() - now) : '--:--:--';
+  const recentAdhan = [...events].reverse().find(event => event.type === 'adhan' && now >= new Date(event.at).getTime());
+  const nextIqama = recentAdhan ? events.find(event => event.type === 'iqama' && event.prayer === recentAdhan.prayer && new Date(event.at).getTime() >= now) : null;
+  $('iqamaCountdown').textContent = nextIqama ? `${nextIqama.prayer} Iqama in ${formatDuration(new Date(nextIqama.at).getTime() - now)}` : '';
+  document.body.classList.toggle('prayer-between', !!nextIqama);
+}
+
+function showPrayerEvent(event = {}) {
+  $('prayerOverlayType').textContent = event.type === 'iqama' ? 'Iqama Time' : 'Prayer Time';
+  $('prayerOverlayName').textContent = event.prayer || '';
+  $('prayerOverlayMessage').textContent = event.type === 'iqama' ? 'Please proceed for Iqama' : `${event.profileName || ''} ${event.city || ''}`.trim();
+  $('prayerOverlay').hidden = false;
+  if (prayerOverlayTimer) clearTimeout(prayerOverlayTimer);
+  prayerOverlayTimer = setTimeout(() => { $('prayerOverlay').hidden = true; }, event.type === 'iqama' ? 90000 : 120000);
+  if (currentPayload?.display?.displayMode === 'prayer' && event.audio && (!prayerState?.profile?.id || prayerState.profile.id === event.profileId)) {
+    const audio = $('prayerAudio');
+    audio.src = event.audio;
+    audio.play().catch(() => {});
+  }
+  loadData().catch(() => {});
 }
 
 function tick() {
@@ -942,6 +1023,9 @@ function tick() {
   $('overviewDate').textContent = now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
   $('orgClock').textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12 });
   $('orgDate').textContent = now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+  $('prayerClock').textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12 });
+  $('prayerDate').textContent = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+  updatePrayerCountdowns();
 }
 
 setInterval(tick, 1000);

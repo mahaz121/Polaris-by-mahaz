@@ -93,6 +93,11 @@ async function emitCompanyProfileChanged(profile) {
   await emitAllDisplays();
 }
 
+function emitPrayerEvent(event) {
+  if (!ioRef) return;
+  ioRef.emit('prayer-event', event);
+}
+
 async function emitAdminStats() {
   if (!ioRef) return;
   const [employees, displays] = await Promise.all([readJson('employees.json', []), readJson('displays.json', [])]);
@@ -108,4 +113,4 @@ async function emitAdminStats() {
   });
 }
 
-module.exports = { initSocket, emitDisplayUpdate, emitAllDisplays, emitWeather, emitCompanyProfileChanged, emitAdminStats };
+module.exports = { initSocket, emitDisplayUpdate, emitAllDisplays, emitWeather, emitCompanyProfileChanged, emitPrayerEvent, emitAdminStats };

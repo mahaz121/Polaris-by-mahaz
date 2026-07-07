@@ -51,7 +51,7 @@ const employeeOrderByDepartment = value => {
     Array.isArray(ids) ? ids.map(id => String(id || '').trim()).filter(Boolean) : []
   ]).filter(([department]) => department));
 };
-const displayModeValue = value => ['overview', 'orgchart'].includes(value) ? value : 'single';
+const displayModeValue = value => ['overview', 'orgchart', 'prayer'].includes(value) ? value : 'single';
 const rootModeValue = value => ['ceo', 'department_managers', 'custom'].includes(value) ? value : 'department_managers';
 
 router.get('/', async (req, res) => res.json(await readJson('displays.json', [])));
@@ -108,6 +108,7 @@ router.post('/', async (req, res) => {
     id,
     name: req.body.name || id,
     employeeId: displayMode === 'single' ? req.body.employeeId || '' : '',
+    prayerProfileId: displayMode === 'prayer' ? req.body.prayerProfileId || '' : '',
     displayMode,
     displayGroup: req.body.displayGroup || '',
     roomNumber: req.body.roomNumber || '',
@@ -152,6 +153,7 @@ router.put('/:id', async (req, res) => {
     ...displays[idx],
     name: req.body.name || displays[idx].name,
     employeeId: displayMode === 'single' ? req.body.employeeId || '' : '',
+    prayerProfileId: displayMode === 'prayer' ? req.body.prayerProfileId || '' : '',
     displayMode,
     displayGroup: req.body.displayGroup || '',
     roomNumber: req.body.roomNumber || '',

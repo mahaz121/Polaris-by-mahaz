@@ -21,8 +21,10 @@ const { router: weatherRoutes, fetchWeather } = require('./routes/weather');
 const userRoutes = require('./routes/users');
 const displayPublicRoutes = require('./routes/displayPublic');
 const { router: zktecoRoutes, pushRouter: zktecoPushRoutes, syncEnabledDevices } = require('./routes/zkteco');
+const { router: prayerRoutes, buildPrayerEventSnapshot } = require('./routes/prayer');
 const { effectiveEmployeeStatus } = require('./utils/status');
 const { dailyTimesheet, todayString } = require('./utils/timesheet');
+const { emitPrayerEvent } = require('./socket');
 
 const app = express();
 const server = http.createServer(app);
@@ -112,6 +114,7 @@ app.use('/api/departments', requirePermission('employees.manage'), departmentRou
 app.use('/api/displays', requirePermission('displays.manage'), displayRoutes);
 app.use('/api/settings', requirePermission('weather.manage'), settingsRoutes);
 app.use('/api/weather', requirePermission('weather.manage'), weatherRoutes);
+app.use('/api/prayer', requireAnyPermission(['prayer.manage', 'displays.manage']), prayerRoutes);
 app.use('/api/users', requirePermission('users.manage'), userRoutes);
 app.use('/api/zkteco', requirePermission('zkteco.manage'), zktecoRoutes);
 
@@ -126,6 +129,25 @@ setInterval(() => fetchWeather(false).catch(console.error), 15 * 60 * 1000);
 fetchWeather(false).catch(console.error);
 syncEnabledDevices([], true).catch(console.error);
 setInterval(() => syncEnabledDevices([], true).catch(console.error), Number(process.env.ZKTECO_SYNC_INTERVAL_SECONDS || 60) * 1000);
+const emittedPrayerEvents = new Set();
+async function checkPrayerEvents() {
+  const now = new Date();
+  const snapshots = await buildPrayerEventSnapshot(now);
+  snapshots.forEach(({ profile, state }) => {
+    (state.events || []).forEach(event => {
+      const eventTime = new Date(event.at).getTime();
+      const delta = Math.abs(eventTime - now.getTime());
+      const key = `${event.profileId}:${event.type}:${event.prayer}:${event.at}`;
+      if (delta <= 30000 && !emittedPrayerEvents.has(key)) {
+        emittedPrayerEvents.add(key);
+        emitPrayerEvent({ ...event, profileName: profile.name, city: profile.city, iqamaMinutes: profile.prayers?.[event.prayer]?.iqamaMinutes || 0 });
+      }
+    });
+  });
+  if (emittedPrayerEvents.size > 500) emittedPrayerEvents.clear();
+}
+setInterval(() => checkPrayerEvents().catch(console.error), 30 * 1000);
+checkPrayerEvents().catch(console.error);
 
 const port = Number(process.env.PORT || 3004);
 server.listen(port, () => console.log(`Polaris server running on port ${port}`));
