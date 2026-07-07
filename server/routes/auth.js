@@ -4,6 +4,13 @@ const { readJson, writeJson } = require('../utils/dataStore');
 const { requireAuth, userPermissions } = require('../middleware/auth');
 const { audit } = require('../utils/audit');
 const router = express.Router();
+const ADMIN_SESSION_MS = 8 * 60 * 60 * 1000;
+const DISPLAY_SESSION_MS = 90 * 24 * 60 * 60 * 1000;
+
+function isDisplayOnlySession(user = {}) {
+  const permissions = userPermissions(user);
+  return permissions.length === 1 && permissions[0] === 'display.access';
+}
 
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
@@ -34,6 +41,7 @@ router.post('/login', async (req, res) => {
       permissions: userPermissions(user),
       mustChangePassword: !!user.mustChangePassword
     };
+    req.session.cookie.maxAge = isDisplayOnlySession(user) ? DISPLAY_SESSION_MS : ADMIN_SESSION_MS;
     audit(req, 'auth.login_success', { userId: user.id, username: user.username });
     res.json({ ok: true, user: req.session.user, mustChangePassword: !!user.mustChangePassword });
   });

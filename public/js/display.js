@@ -113,6 +113,11 @@ function register() {
   socket.emit('register-display', { displayId, resolution: `${screen.width}x${screen.height}` });
 }
 
+function redirectToDisplayLogin() {
+  const next = encodeURIComponent(location.pathname + location.search);
+  location.href = `/admin/login.html?next=${next}`;
+}
+
 function hideOffline() {
   clearTimeout(offlineTimer);
   offlineTimer = null;
@@ -128,6 +133,10 @@ function scheduleOffline(delayMs = 6000) {
 
 async function loadData() {
   const res = await fetch(`/api/display-public/${displayId}/data`, { cache: 'no-store' });
+  if (res.status === 401 || res.status === 403) {
+    redirectToDisplayLogin();
+    return;
+  }
   if (!res.ok) throw new Error('Display not found');
   render(await res.json());
 }
@@ -139,6 +148,7 @@ socket.on('connect', () => {
 socket.on('disconnect', () => scheduleOffline(currentPayload ? 10000 : 2000));
 socket.io.on('reconnect_attempt', () => scheduleOffline(currentPayload ? 10000 : 2000));
 socket.io.on('reconnect', () => loadData().then(hideOffline).catch(() => scheduleOffline(2000)));
+socket.on('auth-required', redirectToDisplayLogin);
 socket.on('display-data', render);
 socket.on('weather-update', data => { weather = data; renderWeather(); });
 socket.on('company-profile-changed', () => loadData().then(hideOffline).catch(() => scheduleOffline(2000)));

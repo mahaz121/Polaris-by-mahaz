@@ -3,7 +3,9 @@ const { buildDisplayPayload } = require('../utils/publicPayload');
 const { effectiveEmployeeStatus } = require('../utils/status');
 
 const displaySockets = new Map();
+const displayOfflineTimers = new Map();
 let ioRef;
+const DISPLAY_OFFLINE_GRACE_MS = Number(process.env.DISPLAY_OFFLINE_GRACE_SECONDS || 70) * 1000;
 
 function isDisplayRole(user = {}) {
   return ['display', 'kiosk', 'viewer'].includes(String(user.role || '').trim().toLowerCase());
@@ -13,6 +15,11 @@ function hasAdminSocketAccess(user = {}) {
   const role = String(user.role || '').trim().toLowerCase();
   if (['administrator', 'admin', 'super admin', 'superadmin'].includes(role)) return true;
   return Array.isArray(user.permissions) && user.permissions.some(permission => permission !== 'display.access');
+}
+
+function hasDisplaySocketAccess(user = {}) {
+  const permissions = Array.isArray(user.permissions) ? user.permissions : [];
+  return permissions.includes('display.access');
 }
 
 async function buildPayload(displayId) {
@@ -36,6 +43,21 @@ async function markDisplay(displayId, socket, status) {
   }
 }
 
+function clearDisplayOfflineTimer(displayId) {
+  const timer = displayOfflineTimers.get(displayId);
+  if (timer) clearTimeout(timer);
+  displayOfflineTimers.delete(displayId);
+}
+
+function scheduleDisplayOffline(displayId, socket) {
+  clearDisplayOfflineTimer(displayId);
+  displayOfflineTimers.set(displayId, setTimeout(async () => {
+    displayOfflineTimers.delete(displayId);
+    const stillOnline = [...displaySockets.values()].includes(displayId);
+    if (!stillOnline) await markDisplay(displayId, socket, 'Offline');
+  }, DISPLAY_OFFLINE_GRACE_MS));
+}
+
 function initSocket(io, sessionMiddleware) {
   ioRef = io;
   if (sessionMiddleware) {
@@ -43,7 +65,8 @@ function initSocket(io, sessionMiddleware) {
   }
   io.on('connection', socket => {
     socket.on('register-display', async ({ displayId, resolution }) => {
-      if (!socket.request.session || !socket.request.session.user) {
+      const user = socket.request.session && socket.request.session.user;
+      if (!user || !hasDisplaySocketAccess(user)) {
         socket.emit('auth-required');
         return;
       }
@@ -52,6 +75,7 @@ function initSocket(io, sessionMiddleware) {
       socket.join(`display:${displayId}`);
       socket.handshake.query.resolution = resolution || '';
       displaySockets.set(socket.id, displayId);
+      clearDisplayOfflineTimer(displayId);
       await markDisplay(displayId, socket, 'Online');
       socket.emit('display-data', await buildPayload(displayId));
     });
@@ -66,7 +90,7 @@ function initSocket(io, sessionMiddleware) {
       displaySockets.delete(socket.id);
       if (!displayId) return;
       const stillOnline = [...displaySockets.values()].includes(displayId);
-      if (!stillOnline) await markDisplay(displayId, socket, 'Offline');
+      if (!stillOnline) scheduleDisplayOffline(displayId, socket);
     });
   });
 }
