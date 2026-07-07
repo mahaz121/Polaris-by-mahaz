@@ -31,6 +31,15 @@ if ($envContent -match "(?m)^SESSION_SECRET=(replace-with-a-generated-strong-sec
   Write-Host "Generated a strong SESSION_SECRET in .env."
 }
 
+if ($envContent -match "(?m)^POLARIS_BOOTSTRAP_ADMIN_PASSWORD=(replace-with-a-temporary-strong-admin-password|)$") {
+  $bytes = New-Object byte[] 18
+  [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+  $adminPassword = [Convert]::ToBase64String($bytes).TrimEnd("=").Replace("+", "-").Replace("/", "_")
+  $envContent = $envContent -replace "(?m)^POLARIS_BOOTSTRAP_ADMIN_PASSWORD=.*$", "POLARIS_BOOTSTRAP_ADMIN_PASSWORD=$adminPassword"
+  Write-Host "Generated bootstrap admin password for first install: $adminPassword"
+  Write-Host "Change it immediately after first login."
+}
+
 Set-Content ".env" $envContent
 
 npm ci --omit=dev

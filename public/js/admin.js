@@ -6,6 +6,7 @@ const socket = io();
 
 const statuses = ['Available', 'Not Available'];
 let state = { employees: [], displays: [], departments: [], settings: {}, users: [], devices: [], timesheet: null, companyProfiles: [], prayerProfiles: [], dashboard: null, me: null };
+let csrfToken = '';
 
 const permissionOptions = [
   ['dashboard.view', 'Dashboard'],
@@ -148,6 +149,14 @@ socket.on('admin-stats', () => route());
 socket.on('data-updated', () => route());
 
 async function api(url, opt = {}) {
+  const method = String(opt.method || 'GET').toUpperCase();
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    if (!csrfToken) {
+      const csrfRes = await fetch('/api/auth/csrf', { credentials: 'same-origin' });
+      if (csrfRes.ok) csrfToken = (await csrfRes.json()).csrfToken || '';
+    }
+    opt.headers = { ...(opt.headers || {}), 'X-CSRF-Token': csrfToken };
+  }
   const res = await fetch(url, opt);
   if (res.status === 401) {
     location.href = '/admin/login.html';
@@ -1415,7 +1424,7 @@ function prayerProfileForm(id = '') {
 
 function zkteco() {
   setTitle('ZKTeco');
-  content.innerHTML = `<button class="btn btn-primary btn-rounded mb-3" id="addDeviceBtn"><i class="bi bi-plus-lg"></i> Add Device</button> <button class="btn btn-outline-secondary btn-rounded mb-3" id="syncBtn"><i class="bi bi-arrow-repeat"></i> Sync Now</button><div class="card table-card"><table class="table mb-0"><thead><tr><th>Device Name</th><th>Location</th><th>Secret</th><th>Last Sync</th><th>Error</th><th></th></tr></thead><tbody>${state.devices.map(d => `<tr><td>${esc(d.name)}</td><td>${esc(d.location || '')}</td><td><code>${esc(d.secret || '')}</code> <button class="btn btn-sm btn-outline-secondary copy-device-secret" data-secret="${esc(d.secret || '')}" title="Copy secret"><i class="bi bi-clipboard"></i></button></td><td>${esc(localDateTime(d.lastSyncAt))}</td><td>${esc(d.lastError || '')}</td><td class="text-end"><button class="btn btn-sm btn-outline-primary edit-device" data-id="${d.id}"><i class="bi bi-pencil"></i></button> <button class="btn btn-sm btn-outline-danger del-device" data-id="${d.id}"><i class="bi bi-trash"></i></button></td></tr>`).join('')}</tbody></table></div>`;
+  content.innerHTML = `<button class="btn btn-primary btn-rounded mb-3" id="addDeviceBtn"><i class="bi bi-plus-lg"></i> Add Device</button> <button class="btn btn-outline-secondary btn-rounded mb-3" id="syncBtn"><i class="bi bi-arrow-repeat"></i> Sync Now</button><div class="card table-card"><table class="table mb-0"><thead><tr><th>Device Name</th><th>Location</th><th>Secret</th><th>Last Sync</th><th>Error</th><th></th></tr></thead><tbody>${state.devices.map(d => `<tr><td>${esc(d.name)}</td><td>${esc(d.location || '')}</td><td><code>${d.secret ? 'Configured' : 'Missing'}</code></td><td>${esc(localDateTime(d.lastSyncAt))}</td><td>${esc(d.lastError || '')}</td><td class="text-end"><button class="btn btn-sm btn-outline-primary edit-device" data-id="${d.id}"><i class="bi bi-pencil"></i></button> <button class="btn btn-sm btn-outline-danger del-device" data-id="${d.id}"><i class="bi bi-trash"></i></button></td></tr>`).join('')}</tbody></table></div>`;
   $('#addDeviceBtn').onclick = () => deviceForm();
   $('#syncBtn').onclick = async () => {
     const r = await api('/api/zkteco/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
@@ -1427,7 +1436,6 @@ function zkteco() {
     toast(message, hasErrors || !imported ? 'warning' : 'success');
     route();
   };
-  document.querySelectorAll('.copy-device-secret').forEach(b => b.onclick = async () => { await navigator.clipboard.writeText(b.dataset.secret || ''); toast('Secret copied'); });
   document.querySelectorAll('.edit-device').forEach(b => b.onclick = () => deviceForm(b.dataset.id));
   document.querySelectorAll('.del-device').forEach(b => b.onclick = async () => { await api(`/api/zkteco/devices/${b.dataset.id}`, { method: 'DELETE' }); toast('Device deleted'); route(); });
 }
@@ -1466,7 +1474,7 @@ function userForm(id = '') {
     <label class="form-label">Username</label>
     <input name="username" class="form-control mb-3" required value="${esc(u.username)}">
     <label class="form-label">Password ${id ? '(leave blank to keep current)' : ''}</label>
-    <input name="password" type="password" class="form-control mb-3" ${id ? '' : 'required'}>
+    <input name="password" type="password" minlength="12" class="form-control mb-3" ${id ? '' : 'required'}>
     <label class="form-label">Role</label>
     <select name="role" class="form-select mb-3">
       ${['Super Admin', 'Employee Viewer', 'Availability Viewer', 'Employee Editor', 'Display', 'Kiosk', 'Custom'].map(role => `<option value="${esc(role)}" ${String(u.role || '').toLowerCase() === role.toLowerCase() ? 'selected' : ''}>${esc(role)}</option>`).join('')}
@@ -1507,7 +1515,7 @@ async function deleteUser(id) {
 
 function passwordChangeForm(force = false) {
   $('#modalTitle').textContent = 'Change Password';
-  $('#modalBody').innerHTML = `<form id="passwordForm"><label class="form-label">Current Password</label><input name="currentPassword" type="password" class="form-control mb-3" required><label class="form-label">New Password</label><input name="newPassword" type="password" minlength="8" class="form-control mb-3" required><button class="btn btn-primary">Update Password</button></form>`;
+  $('#modalBody').innerHTML = `<form id="passwordForm"><label class="form-label">Current Password</label><input name="currentPassword" type="password" class="form-control mb-3" required><label class="form-label">New Password</label><input name="newPassword" type="password" minlength="12" class="form-control mb-3" required><button class="btn btn-primary">Update Password</button></form>`;
   modal.show();
   if (force) modalEl.querySelector('.btn-close').style.display = 'none';
   $('#passwordForm').onsubmit = async ev => { ev.preventDefault(); await api('/api/auth/change-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formObject(ev.target)) }); modal.hide(); modalEl.querySelector('.btn-close').style.display = ''; toast('Password updated'); route(); };

@@ -1,20 +1,14 @@
 const express = require('express');
-const multer = require('multer');
-const path = require('path');
 const { randomUUID } = require('crypto');
-const { readJson, writeJson, root } = require('../utils/dataStore');
+const { readJson, writeJson } = require('../utils/dataStore');
 const { nowIso } = require('../utils/database');
 const { PRAYERS, defaultPrayers, profilePrayerState } = require('../utils/prayer');
 const { emitAllDisplays } = require('../socket');
+const { AUDIO_MIME_TYPES, safeUpload } = require('../utils/security');
 
 const router = express.Router();
 
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: path.join(root, 'public', 'uploads'),
-    filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '-')}`)
-  })
-});
+const upload = safeUpload({ fieldTypes: { '*': AUDIO_MIME_TYPES }, maxFileSize: 10 * 1024 * 1024, maxFiles: 10 });
 
 function checked(value) {
   return value === true || value === 'true' || value === 'on' || value === '1';

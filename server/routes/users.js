@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { randomUUID } = require('crypto');
 const { readJson, writeJson } = require('../utils/dataStore');
+const { audit } = require('../utils/audit');
 const router = express.Router();
 
 const validPermissions = new Set([
@@ -25,6 +26,7 @@ router.get('/', async (req, res) => res.json((await readJson('users.json', [])).
 router.post('/', async (req, res) => {
   const users = await readJson('users.json', []);
   if (!req.body.username || !req.body.password) return res.status(400).json({ error: 'Username and password are required' });
+  if (String(req.body.password).length < 12) return res.status(400).json({ error: 'Password must be at least 12 characters' });
   if (users.some(u => u.username === req.body.username)) return res.status(409).json({ error: 'Username already exists' });
   const user = {
     id: randomUUID(),
@@ -38,6 +40,7 @@ router.post('/', async (req, res) => {
   };
   users.push(user);
   await writeJson('users.json', users);
+  audit(req, 'users.create', { targetUserId: user.id, username: user.username, role: user.role, permissions: user.permissions });
   const { passwordHash, ...safe } = user;
   res.status(201).json(safe);
 });
@@ -49,15 +52,21 @@ router.put('/:id', async (req, res) => {
   users[idx].role = req.body.role || users[idx].role;
   users[idx].permissions = normalizePermissions(req.body.permissions);
   users[idx].active = req.body.active === undefined ? users[idx].active : !!req.body.active;
-  if (req.body.password) users[idx].passwordHash = await bcrypt.hash(req.body.password, 10);
+  if (req.body.password) {
+    if (String(req.body.password).length < 12) return res.status(400).json({ error: 'Password must be at least 12 characters' });
+    users[idx].passwordHash = await bcrypt.hash(req.body.password, 10);
+  }
   users[idx].updatedAt = new Date().toISOString();
   await writeJson('users.json', users);
+  audit(req, 'users.update', { targetUserId: users[idx].id, username: users[idx].username, role: users[idx].role, permissions: users[idx].permissions, active: users[idx].active });
   const { passwordHash, ...safe } = users[idx];
   res.json(safe);
 });
 router.delete('/:id', async (req, res) => {
-  const users = (await readJson('users.json', [])).filter(u => u.id !== req.params.id);
+  const original = await readJson('users.json', []);
+  const users = original.filter(u => u.id !== req.params.id);
   await writeJson('users.json', users);
+  audit(req, 'users.delete', { targetUserId: req.params.id });
   res.json({ ok: true });
 });
 module.exports = router;

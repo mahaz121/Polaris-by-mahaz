@@ -25,33 +25,46 @@ const { router: prayerRoutes, buildPrayerEventSnapshot } = require('./routes/pra
 const { effectiveEmployeeStatus } = require('./utils/status');
 const { dailyTimesheet, todayString } = require('./utils/timesheet');
 const { emitPrayerEvent } = require('./socket');
+const { corsOrigin, ensureCsrfToken, rateLimit, requireCsrf, requireStrongSecret } = require('./utils/security');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: true, credentials: true } });
+const io = new Server(server, { cors: { origin: corsOrigin, credentials: true } });
 
 app.disable('x-powered-by');
+if (process.env.TRUST_PROXY !== '0') app.set('trust proxy', 1);
 app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }));
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 const sessionMiddleware = session({
   store: new FileStore({ path: path.join(root, 'data', 'sessions') }),
-  secret: process.env.SESSION_SECRET || 'replace-this-secret',
+  secret: requireStrongSecret('SESSION_SECRET', 32),
   resave: false,
   saveUninitialized: false,
-  cookie: { httpOnly: true, sameSite: 'lax', maxAge: 8 * 60 * 60 * 1000 }
+  cookie: {
+    httpOnly: true,
+    secure: process.env.COOKIE_SECURE === '1' || (process.env.COOKIE_SECURE !== '0' && process.env.NODE_ENV === 'production'),
+    sameSite: process.env.COOKIE_SAMESITE || 'lax',
+    maxAge: 8 * 60 * 60 * 1000
+  }
 });
 
 app.use(sessionMiddleware);
 app.use(refreshUserSession);
+app.use(requireCsrf);
 
 app.use('/css', express.static(path.join(root, 'public', 'css')));
 app.use('/js', express.static(path.join(root, 'public', 'js')));
 app.use('/images', express.static(path.join(root, 'public', 'images')));
 app.use('/Logo', express.static(path.join(root, 'public', 'Logo')));
-app.use('/uploads', express.static(path.join(root, 'public', 'uploads')));
+app.use('/uploads', express.static(path.join(root, 'public', 'uploads'), {
+  setHeaders: res => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+  }
+}));
 app.get('/', requireAdmin, (req, res) => res.redirect('/admin/'));
 function sendAdminIndex(req, res) {
   res.set('Cache-Control', 'no-store');
@@ -68,7 +81,10 @@ app.get('/display/:id', requirePermission('display.access'), (req, res) => {
 });
 app.get('/setup', requirePermission('display.access'), (req, res) => res.sendFile(path.join(root, 'public', 'setup', 'index.html')));
 
+app.get('/api/auth/csrf', (req, res) => res.json({ csrfToken: ensureCsrfToken(req) }));
+app.use('/api/auth/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 10, keyPrefix: 'login' }));
 app.use('/api/auth', authRoutes);
+app.use('/api/zkteco/push', rateLimit({ windowMs: 60 * 1000, max: 30, keyPrefix: 'zkteco-push' }));
 app.use('/api/zkteco', zktecoPushRoutes);
 app.get('/api/dashboard', requirePermission('dashboard.view'), async (req, res) => {
   const { readJson } = require('./utils/dataStore');
@@ -120,6 +136,9 @@ app.use('/api/zkteco', requirePermission('zkteco.manage'), zktecoRoutes);
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 app.use((err, req, res, next) => {
+  if (err && (err.code === 'LIMIT_FILE_SIZE' || err.code === 'LIMIT_FILE_COUNT' || err.message === 'Unsupported file type')) {
+    return res.status(400).json({ error: err.message || 'Invalid upload' });
+  }
   console.error(err);
   res.status(500).json({ error: 'Internal server error' });
 });

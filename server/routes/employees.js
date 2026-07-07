@@ -1,18 +1,15 @@
 const express = require('express');
-const multer = require('multer');
-const path = require('path');
 const { randomUUID } = require('crypto');
-const { readJson, writeJson, root } = require('../utils/dataStore');
+const { readJson, writeJson } = require('../utils/dataStore');
 const { emitAllDisplays, emitAdminStats } = require('../socket');
 const { db, nowIso } = require('../utils/database');
 const { STATUSES, normalizeStatus, effectiveEmployeeStatus } = require('../utils/status');
 const { hasPermission } = require('../middleware/auth');
+const { IMAGE_MIME_TYPES, safeUpload } = require('../utils/security');
+const { audit } = require('../utils/audit');
 const router = express.Router();
 
-const upload = multer({ storage: multer.diskStorage({
-  destination: path.join(root, 'public', 'uploads'),
-  filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '')}`)
-}) });
+const upload = safeUpload({ fieldTypes: { photo: IMAGE_MIME_TYPES }, maxFileSize: 5 * 1024 * 1024 });
 
 function normalizeCompanyEmailLocalPart(value = '') {
   return String(value || '')
@@ -77,6 +74,7 @@ router.post('/', (req, res, next) => hasPermission(req.session.user, 'employees.
   const employee = { id: randomUUID(), ...normalize(req.body, req.file), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
   employees.push(employee);
   await writeJson('employees.json', employees);
+  audit(req, 'employees.create', { employeeId: employee.id, employeeNumber: employee.employeeNumber });
   await emitAllDisplays();
   await emitAdminStats();
   res.status(201).json(employee);
@@ -88,6 +86,7 @@ router.put('/:id', (req, res, next) => hasPermission(req.session.user, 'employee
   if (idx === -1) return res.status(404).json({ error: 'Employee not found' });
   employees[idx] = { ...employees[idx], ...normalize(req.body, req.file, employees[idx]), updatedAt: new Date().toISOString() };
   await writeJson('employees.json', employees);
+  audit(req, 'employees.update', { employeeId: employees[idx].id, employeeNumber: employees[idx].employeeNumber });
   await emitAllDisplays();
   await emitAdminStats();
   res.json(employees[idx]);
@@ -100,6 +99,7 @@ router.delete('/:id', (req, res, next) => hasPermission(req.session.user, 'emplo
   displays = displays.map(d => d.employeeId === req.params.id ? { ...d, employeeId: '', updatedAt: new Date().toISOString() } : d);
   await writeJson('employees.json', employees);
   await writeJson('displays.json', displays);
+  audit(req, 'employees.delete', { employeeId: req.params.id });
   await emitAllDisplays();
   await emitAdminStats();
   res.json({ ok: true });

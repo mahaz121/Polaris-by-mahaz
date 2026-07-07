@@ -36,7 +36,7 @@ db.backup(target)
 NODE
 
 cp -R public/uploads "$TMP_DIR/public/uploads"
-if [ -f .env ]; then
+if [ "${BACKUP_ENV:-0}" = "1" ] && [ -f .env ]; then
   cp .env "$TMP_DIR/.env"
 fi
 

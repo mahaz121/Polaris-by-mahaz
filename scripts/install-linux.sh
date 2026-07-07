@@ -35,6 +35,13 @@ if grep -Eq '^SESSION_SECRET=(replace-with-a-generated-strong-secret|change-this
   echo "Generated a strong SESSION_SECRET in .env."
 fi
 
+if grep -Eq '^POLARIS_BOOTSTRAP_ADMIN_PASSWORD=(replace-with-a-temporary-strong-admin-password|)$' .env; then
+  ADMIN_PASSWORD="$(node -e "console.log(require('crypto').randomBytes(18).toString('base64url'))")"
+  sed -i "s/^POLARIS_BOOTSTRAP_ADMIN_PASSWORD=.*/POLARIS_BOOTSTRAP_ADMIN_PASSWORD=$ADMIN_PASSWORD/" .env
+  echo "Generated bootstrap admin password for first install: $ADMIN_PASSWORD"
+  echo "Change it immediately after first login."
+fi
+
 npm ci --omit=dev
 npm run migrate
 

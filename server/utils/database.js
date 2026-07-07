@@ -435,10 +435,14 @@ function migrateJsonOnce() {
 function ensureDefaultAdmin() {
   const count = db.prepare('SELECT COUNT(*) AS count FROM users').get().count;
   if (count) return;
+  const bootstrapPassword = String(process.env.POLARIS_BOOTSTRAP_ADMIN_PASSWORD || '').trim();
+  if (bootstrapPassword.length < 12) {
+    throw new Error('POLARIS_BOOTSTRAP_ADMIN_PASSWORD must be set to at least 12 characters for first install');
+  }
   db.prepare(`
     INSERT INTO users (id, username, password_hash, role, permissions, active, must_change_password, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, 1, 1, ?, ?)
-  `).run('user001', 'admin', bcrypt.hashSync('admin123', 10), 'Administrator', JSON.stringify([]), nowIso(), nowIso());
+  `).run('user001', 'admin', bcrypt.hashSync(bootstrapPassword, 10), 'Administrator', JSON.stringify([]), nowIso(), nowIso());
 }
 
 function removeDefaultCompanyName() {

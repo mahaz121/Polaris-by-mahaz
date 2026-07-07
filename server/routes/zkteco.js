@@ -6,6 +6,7 @@ const { db, nowIso } = require('../utils/database');
 const { insertAttendanceLog } = require('../utils/status');
 const { dailyTimesheet, todayString } = require('../utils/timesheet');
 const { emitAllDisplays, emitAdminStats } = require('../socket');
+const { audit } = require('../utils/audit');
 
 const router = express.Router();
 const pushRouter = express.Router();
@@ -191,6 +192,7 @@ router.post('/devices', async (req, res) => {
   }
   devices.push(device);
   await writeJson('zkteco_devices.json', devices);
+  audit(req, 'zkteco.device_create', { deviceId: device.id, name: device.name, location: device.location });
   res.status(201).json(device);
 });
 
@@ -203,12 +205,14 @@ router.put('/devices/:id', async (req, res) => {
     return res.status(409).json({ error: 'Device name already exists' });
   }
   await writeJson('zkteco_devices.json', devices);
+  audit(req, 'zkteco.device_update', { deviceId: devices[idx].id, name: devices[idx].name, location: devices[idx].location });
   res.json(devices[idx]);
 });
 
 router.delete('/devices/:id', async (req, res) => {
   const devices = (await readJson('zkteco_devices.json', [])).filter(d => d.id !== req.params.id);
   await writeJson('zkteco_devices.json', devices);
+  audit(req, 'zkteco.device_delete', { deviceId: req.params.id });
   res.json({ ok: true });
 });
 
