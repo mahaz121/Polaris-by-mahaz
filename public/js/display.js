@@ -133,6 +133,7 @@ socket.on('prayer-event', showPrayerEvent);
 function render(payload) {
   if (!payload) return;
   currentPayload = payload;
+  document.body.classList.toggle('prayer-display-mode', payload.display?.displayMode === 'prayer');
   settings = payload.settings || settings;
   weather = payload.weather || (settings.weather && settings.weather.data) || weather;
   const company = settings.company || {};
