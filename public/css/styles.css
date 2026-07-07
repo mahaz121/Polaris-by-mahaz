@@ -506,14 +506,14 @@ code{color:#1d4ed8;background:#eff6ff;border-radius:6px;padding:.1rem .35rem}
 .prayer-logo{display:block;max-width:clamp(160px,14vw,280px);max-height:clamp(62px,9vh,118px);object-fit:contain;filter:drop-shadow(0 12px 24px rgba(0,0,0,.22))}
 .prayer-logo[hidden]{display:none}
 .prayer-title-block{text-align:center;min-width:0}
-.prayer-city{color:var(--company-accent);font-weight:900;text-transform:uppercase;letter-spacing:.08em;font-size:clamp(13px,1.5vw,28px)}
-.prayer-head h1{margin:0;color:var(--display-text-strong);font-size:clamp(32px,5.4vw,92px);font-weight:950;line-height:.95}
+.prayer-city{color:var(--display-text-soft);font-weight:900;text-transform:uppercase;letter-spacing:.08em;font-size:clamp(11px,1.15vw,20px);margin-bottom:clamp(4px,.7vh,10px);white-space:nowrap}
+.prayer-head h1{margin:0;color:var(--display-text-strong);font-size:clamp(30px,4.6vw,78px);font-weight:950;line-height:.95}
 .prayer-clock{display:grid;justify-items:end;color:var(--display-text-strong);line-height:1;padding-right:clamp(14px,2.4vw,44px)}
-.prayer-clock span{font-size:clamp(24px,3.8vw,64px);font-weight:900}
-.prayer-clock small{font-size:clamp(12px,1.25vw,22px);color:var(--display-text-soft)}
+.prayer-clock span{font-size:clamp(22px,3.25vw,56px);font-weight:900}
+.prayer-clock small{font-size:clamp(11px,1.12vw,20px);color:var(--display-text-soft)}
 .prayer-clock-meta{display:flex;align-items:center;justify-content:flex-end;gap:clamp(8px,1vw,16px);margin-top:clamp(4px,.6vh,8px);white-space:nowrap}
-.prayer-weather{display:flex;align-items:center;gap:8px;color:var(--display-text-strong);font-size:clamp(13px,1.25vw,22px);font-weight:900}
-.prayer-weather img{width:clamp(16px,1.45vw,26px);height:clamp(16px,1.45vw,26px);object-fit:contain}
+.prayer-weather{display:flex;align-items:center;gap:10px;color:var(--display-text-strong);font-size:clamp(16px,1.55vw,30px);font-weight:950}
+.prayer-weather img{width:clamp(20px,1.75vw,34px);height:clamp(20px,1.75vw,34px);object-fit:contain}
 .prayer-weather img[hidden]{display:none}
 .prayer-now{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:clamp(10px,2vw,24px);align-items:center;padding:clamp(12px,1.8vw,26px);border:1px solid rgba(56,189,248,.26);border-radius:8px;background:rgba(7,24,43,.68);box-shadow:0 24px 70px rgba(0,0,0,.22);min-width:0}
 .prayer-now span{color:var(--display-text-soft);font-weight:900;text-transform:uppercase;letter-spacing:.08em;font-size:clamp(11px,1.1vw,18px)}
@@ -556,6 +556,7 @@ code{color:#1d4ed8;background:#eff6ff;border-radius:6px;padding:.1rem .35rem}
   .prayer-title-block{text-align:left}
   .prayer-clock{justify-items:start}
   .prayer-clock-meta{justify-content:flex-start}
+  .prayer-city{white-space:normal}
   .prayer-times-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .prayer-time-card:last-child{grid-column:1/-1}
   .prayer-now{grid-template-columns:1fr;justify-items:start}
@@ -611,6 +612,7 @@ code{color:#1d4ed8;background:#eff6ff;border-radius:6px;padding:.1rem .35rem}
   .prayer-title-block{text-align:left}
   .prayer-clock{justify-items:start;padding-right:0}
   .prayer-clock-meta{display:grid;gap:6px;justify-items:start}
+  .prayer-city{white-space:normal}
   .prayer-times-grid{grid-template-columns:1fr}
   .prayer-time-card:last-child{grid-column:auto;border-bottom-right-radius:42px}
   .prayer-frame-border-outer{border-top-left-radius:56px;border-bottom-right-radius:56px}

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Office Display</title>
-  <link href="/css/styles.css?v=20260707-prayer-logo-card-reconnect" rel="stylesheet">
+  <link href="/css/styles.css?v=20260707-prayer-info-corner" rel="stylesheet">
 </head>
 <body class="display-body cursor-none">
   <div class="offline" id="offline"><div><h1>Connection Lost</h1><p>Trying to reconnect...</p></div></div>
@@ -91,10 +91,10 @@
         <div class="prayer-head">
           <div class="prayer-logo-wrap"><img id="prayerLogo" class="prayer-logo" hidden alt=""></div>
           <div class="prayer-title-block">
-            <div id="prayerCity" class="prayer-city"></div>
             <h1 id="prayerTitle">Prayer Times</h1>
           </div>
           <div class="prayer-clock">
+            <div id="prayerCity" class="prayer-city"></div>
             <span id="prayerClock"></span>
             <div class="prayer-clock-meta">
               <small id="prayerDate"></small>
@@ -146,6 +146,6 @@
   </div>
   <audio id="prayerAudio"></audio>
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/js/display.js?v=20260707-prayer-logo-card-reconnect"></script>
+  <script src="/js/display.js?v=20260707-prayer-info-corner"></script>
 </body>
 </html>
