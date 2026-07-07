@@ -1,5 +1,5 @@
 const express = require('express');
-const { randomUUID } = require('crypto');
+const { randomBytes, randomUUID, timingSafeEqual } = require('crypto');
 const ZKLib = require('zklib-js');
 const { readJson, writeJson } = require('../utils/dataStore');
 const { db, nowIso } = require('../utils/database');
@@ -10,6 +10,16 @@ const { emitAllDisplays, emitAdminStats } = require('../socket');
 const router = express.Router();
 const pushRouter = express.Router();
 const pushToken = () => process.env.ZKTECO_PUSH_TOKEN || '';
+
+function generateBridgeSecret() {
+  return randomBytes(32).toString('hex');
+}
+
+function secureEqual(a, b) {
+  const left = Buffer.from(String(a || ''));
+  const right = Buffer.from(String(b || ''));
+  return left.length === right.length && timingSafeEqual(left, right);
+}
 
 function normalizeDeviceEndpoint(inputHost, inputPort) {
   let host = String(inputHost || '').trim();
@@ -39,6 +49,8 @@ function normalizeDevice(body, existing = {}) {
   return {
     id: existing.id || body.id || randomUUID(),
     name: body.name || existing.name || 'ZKTeco Device',
+    location: body.location || existing.location || '',
+    secret: body.secret || body.bridgeSecret || existing.secret || existing.bridgeSecret || generateBridgeSecret(),
     ip: endpoint.host,
     port: endpoint.port,
     enabled: body.enabled === true || body.enabled === 'true' || body.enabled === 'on',
@@ -173,7 +185,10 @@ router.get('/devices', async (req, res) => {
 router.post('/devices', async (req, res) => {
   const devices = await readJson('zkteco_devices.json', []);
   const device = normalizeDevice(req.body);
-  if (!device.ip) return res.status(400).json({ error: 'Device IP is required' });
+  if (!device.name) return res.status(400).json({ error: 'Device name is required' });
+  if (devices.some(d => String(d.name).trim().toLowerCase() === String(device.name).trim().toLowerCase())) {
+    return res.status(409).json({ error: 'Device name already exists' });
+  }
   devices.push(device);
   await writeJson('zkteco_devices.json', devices);
   res.status(201).json(device);
@@ -184,6 +199,9 @@ router.put('/devices/:id', async (req, res) => {
   const idx = devices.findIndex(d => d.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Device not found' });
   devices[idx] = normalizeDevice(req.body, devices[idx]);
+  if (devices.some((d, i) => i !== idx && String(d.name).trim().toLowerCase() === String(devices[idx].name).trim().toLowerCase())) {
+    return res.status(409).json({ error: 'Device name already exists' });
+  }
   await writeJson('zkteco_devices.json', devices);
   res.json(devices[idx]);
 });
@@ -206,10 +224,8 @@ router.get('/logs', (req, res) => {
 
 pushRouter.post('/push', async (req, res) => {
   const configuredToken = pushToken();
-  const providedToken = String(req.get('x-polaris-bridge-token') || req.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
-  if (!configuredToken || providedToken !== configuredToken) return res.status(401).json({ error: 'Invalid bridge token' });
-
   const body = req.body || {};
+  const providedToken = String(req.get('x-polaris-bridge-token') || req.get('authorization') || body.secret || body.deviceSecret || '').replace(/^Bearer\s+/i, '').trim();
   const rows = rowsFromResult(body.logs || body.attendance || body.rows || []);
   const endpoint = normalizeDeviceEndpoint(body.ip || body.host || '', body.port || 4370);
   const devices = await readJson('zkteco_devices.json', []);
@@ -218,16 +234,14 @@ pushRouter.post('/push', async (req, res) => {
     || devices.find(item => item.ip === endpoint.host && Number(item.port || 4370) === Number(endpoint.port || 4370));
 
   if (!device) {
-    device = normalizeDevice({
-      id: body.deviceId,
-      name: body.deviceName || body.name || endpoint.host || 'Bridge Device',
-      ip: endpoint.host || 'bridge',
-      port: endpoint.port || 4370,
-      enabled: true,
-      pollingInterval: 60,
-      punchLogic: 'odd_even'
+    return res.status(404).json({
+      error: 'ZKTeco device is not registered in Polaris. Add the device manually first, then set ZKTECO_DEVICE_NAME in the bridge .env to exactly the same name.'
     });
-    devices.push(device);
+  }
+
+  const expectedSecret = device.secret || device.bridgeSecret || configuredToken;
+  if (!expectedSecret || !secureEqual(providedToken, expectedSecret)) {
+    return res.status(401).json({ error: 'Invalid ZKTeco device secret' });
   }
 
   const userIdMap = body.userIdMap ? objectToMap(body.userIdMap) : objectToMap(device.userIdMap);
@@ -258,6 +272,10 @@ async function syncEnabledDevices(extraLogs = [], force = false) {
   const results = [];
 
   for (const device of enabled) {
+    if (!device.ip) {
+      results.push({ deviceId: device.id, ok: true, skipped: true, reason: 'Bridge-managed device' });
+      continue;
+    }
     const dueAt = device.lastSyncAt ? new Date(device.lastSyncAt).getTime() + Number(device.pollingInterval || 300) * 1000 : 0;
     if (!force && dueAt && Date.now() < dueAt) continue;
     try {

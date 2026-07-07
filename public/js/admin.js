@@ -45,6 +45,17 @@ const pagePermissions = {
 const navPageKeys = ['dashboard', 'employees', 'displays', 'company-profiles', 'weather', 'zkteco', 'users', 'about-developer'];
 
 const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function randomSecret(bytes = 32) {
+  const chars = [];
+  const values = new Uint8Array(bytes);
+  if (window.crypto?.getRandomValues) {
+    window.crypto.getRandomValues(values);
+  } else {
+    values.forEach((_, index) => { values[index] = Math.floor(Math.random() * 256); });
+  }
+  values.forEach(value => chars.push(value.toString(16).padStart(2, '0')));
+  return chars.join('');
+}
 function permissionsFor(user = {}) {
   const role = String(user.role || '').trim().toLowerCase();
   const explicit = Array.isArray(user.permissions) ? user.permissions.filter(Boolean) : [];
@@ -1327,7 +1338,7 @@ async function weather() {
 }
 function zkteco() {
   setTitle('ZKTeco');
-  content.innerHTML = `<button class="btn btn-primary btn-rounded mb-3" id="addDeviceBtn"><i class="bi bi-plus-lg"></i> Add Device</button> <button class="btn btn-outline-secondary btn-rounded mb-3" id="syncBtn"><i class="bi bi-arrow-repeat"></i> Sync Now</button><div class="card table-card"><table class="table mb-0"><thead><tr><th>Name</th><th>IP</th><th>Port</th><th>Enabled</th><th>Interval</th><th>Last Sync</th><th>Error</th><th></th></tr></thead><tbody>${state.devices.map(d => `<tr><td>${esc(d.name)}</td><td>${esc(d.ip)}</td><td>${esc(d.port)}</td><td>${d.enabled ? 'Yes' : 'No'}</td><td>${esc(d.pollingInterval)}s</td><td>${esc(localDateTime(d.lastSyncAt))}</td><td>${esc(d.lastError || '')}</td><td class="text-end"><button class="btn btn-sm btn-outline-primary edit-device" data-id="${d.id}"><i class="bi bi-pencil"></i></button> <button class="btn btn-sm btn-outline-danger del-device" data-id="${d.id}"><i class="bi bi-trash"></i></button></td></tr>`).join('')}</tbody></table></div>`;
+  content.innerHTML = `<button class="btn btn-primary btn-rounded mb-3" id="addDeviceBtn"><i class="bi bi-plus-lg"></i> Add Device</button> <button class="btn btn-outline-secondary btn-rounded mb-3" id="syncBtn"><i class="bi bi-arrow-repeat"></i> Sync Now</button><div class="card table-card"><table class="table mb-0"><thead><tr><th>Device Name</th><th>Location</th><th>Secret</th><th>Last Sync</th><th>Error</th><th></th></tr></thead><tbody>${state.devices.map(d => `<tr><td>${esc(d.name)}</td><td>${esc(d.location || '')}</td><td><code>${esc(d.secret || '')}</code> <button class="btn btn-sm btn-outline-secondary copy-device-secret" data-secret="${esc(d.secret || '')}" title="Copy secret"><i class="bi bi-clipboard"></i></button></td><td>${esc(localDateTime(d.lastSyncAt))}</td><td>${esc(d.lastError || '')}</td><td class="text-end"><button class="btn btn-sm btn-outline-primary edit-device" data-id="${d.id}"><i class="bi bi-pencil"></i></button> <button class="btn btn-sm btn-outline-danger del-device" data-id="${d.id}"><i class="bi bi-trash"></i></button></td></tr>`).join('')}</tbody></table></div>`;
   $('#addDeviceBtn').onclick = () => deviceForm();
   $('#syncBtn').onclick = async () => {
     const r = await api('/api/zkteco/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
@@ -1339,15 +1350,18 @@ function zkteco() {
     toast(message, hasErrors || !imported ? 'warning' : 'success');
     route();
   };
+  document.querySelectorAll('.copy-device-secret').forEach(b => b.onclick = async () => { await navigator.clipboard.writeText(b.dataset.secret || ''); toast('Secret copied'); });
   document.querySelectorAll('.edit-device').forEach(b => b.onclick = () => deviceForm(b.dataset.id));
   document.querySelectorAll('.del-device').forEach(b => b.onclick = async () => { await api(`/api/zkteco/devices/${b.dataset.id}`, { method: 'DELETE' }); toast('Device deleted'); route(); });
 }
 
 function deviceForm(id = '') {
-  const d = state.devices.find(x => x.id === id) || { port: 4370, pollingInterval: 300, enabled: false, punchLogic: 'odd_even' };
+  const d = state.devices.find(x => x.id === id) || { location: '', secret: randomSecret(), port: 4370, pollingInterval: 60, enabled: true, punchLogic: 'odd_even' };
   $('#modalTitle').textContent = id ? 'Edit ZKTeco Device' : 'Add ZKTeco Device';
-  $('#modalBody').innerHTML = `<form id="deviceForm"><div class="row g-3"><div class="col-md-6"><label class="form-label">Device Name</label><input name="name" class="form-control" value="${esc(d.name)}" required></div><div class="col-md-6"><label class="form-label">Device IP</label><input name="ip" class="form-control" value="${esc(d.ip)}" required></div><div class="col-md-4"><label class="form-label">Port</label><input name="port" type="number" class="form-control" value="${esc(d.port)}"></div><div class="col-md-4"><label class="form-label">Polling Interval</label><input name="pollingInterval" type="number" class="form-control" value="${esc(d.pollingInterval)}"></div><div class="col-md-4"><label class="form-label">Logic</label><select name="punchLogic" class="form-select"><option value="odd_even" selected>In/out order = latest IN</option></select></div><div class="col-12"><div class="form-check"><input name="enabled" type="checkbox" class="form-check-input" ${d.enabled ? 'checked' : ''}><label class="form-check-label">Enabled</label></div></div></div><button class="btn btn-primary mt-4">Save</button></form>`;
+  $('#modalBody').innerHTML = `<form id="deviceForm"><div class="row g-3"><div class="col-md-6"><label class="form-label">Device Name</label><input name="name" class="form-control" value="${esc(d.name)}" required></div><div class="col-md-6"><label class="form-label">Location</label><input name="location" class="form-control" value="${esc(d.location || '')}" placeholder="Riyadh"></div><div class="col-12"><label class="form-label">Secret</label><div class="input-group"><input name="secret" id="deviceSecret" class="form-control" value="${esc(d.secret || randomSecret())}" required><button class="btn btn-outline-secondary" type="button" id="generateDeviceSecret" title="Generate secret"><i class="bi bi-shuffle"></i></button><button class="btn btn-outline-secondary" type="button" id="copyDeviceSecret" title="Copy secret"><i class="bi bi-clipboard"></i></button></div></div><input name="ip" type="hidden" value="${esc(d.ip || '')}"><input name="port" type="hidden" value="${esc(d.port || 4370)}"><input name="pollingInterval" type="hidden" value="${esc(d.pollingInterval || 60)}"><input name="punchLogic" type="hidden" value="odd_even"><input name="enabled" type="hidden" value="on"></div><button class="btn btn-primary mt-4">Save</button></form>`;
   modal.show();
+  $('#generateDeviceSecret').onclick = () => { $('#deviceSecret').value = randomSecret(); };
+  $('#copyDeviceSecret').onclick = async () => { await navigator.clipboard.writeText($('#deviceSecret').value); toast('Secret copied'); };
   $('#deviceForm').onsubmit = async ev => { ev.preventDefault(); const data = formObject(ev.target); data.enabled = !!data.enabled; await api(id ? `/api/zkteco/devices/${id}` : '/api/zkteco/devices', { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); modal.hide(); toast('Device saved'); route(); };
 }
 

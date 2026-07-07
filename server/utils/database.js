@@ -214,6 +214,8 @@ function initDatabase() {
     CREATE TABLE IF NOT EXISTS zkteco_devices (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
+      location TEXT,
+      bridge_secret TEXT,
       ip TEXT NOT NULL,
       port INTEGER NOT NULL DEFAULT 4370,
       enabled INTEGER NOT NULL DEFAULT 0,
@@ -274,6 +276,8 @@ function initDatabase() {
   ensureColumn('company_profiles', 'office_end_time', "TEXT DEFAULT '16:00'");
   ensureColumn('company_profiles', 'latest_arrival_time', "TEXT DEFAULT '08:30'");
   ensureColumn('company_profiles', 'off_days', 'TEXT');
+  ensureColumn('zkteco_devices', 'location', 'TEXT');
+  ensureColumn('zkteco_devices', 'bridge_secret', 'TEXT');
   ensureColumn('zkteco_devices', 'user_id_map', 'TEXT');
   migrateJsonOnce();
   ensureDepartmentsFromEmployees();
@@ -886,6 +890,8 @@ function mapDevice(row) {
   return row && {
     id: row.id,
     name: row.name,
+    location: row.location || '',
+    secret: row.bridge_secret || '',
     ip: row.ip,
     port: row.port,
     enabled: !!row.enabled,
@@ -1086,12 +1092,14 @@ async function writeJson(name, value) {
     const tx = db.transaction(items => {
       db.prepare('DELETE FROM zkteco_devices').run();
       const stmt = db.prepare(`
-        INSERT INTO zkteco_devices (id, name, ip, port, enabled, polling_interval, punch_logic, user_id_map, last_sync_at, last_error, created_at, updated_at)
-        VALUES (@id, @name, @ip, @port, @enabled, @pollingInterval, @punchLogic, @userIdMap, @lastSyncAt, @lastError, @createdAt, @updatedAt)
+        INSERT INTO zkteco_devices (id, name, location, bridge_secret, ip, port, enabled, polling_interval, punch_logic, user_id_map, last_sync_at, last_error, created_at, updated_at)
+        VALUES (@id, @name, @location, @secret, @ip, @port, @enabled, @pollingInterval, @punchLogic, @userIdMap, @lastSyncAt, @lastError, @createdAt, @updatedAt)
       `);
       items.forEach(d => stmt.run({
         id: d.id,
         name: d.name || d.ip || 'ZKTeco Device',
+        location: d.location || '',
+        secret: d.secret || d.bridgeSecret || '',
         ip: d.ip || '',
         port: Number(d.port || 4370),
         enabled: d.enabled ? 1 : 0,
