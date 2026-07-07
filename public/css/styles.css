@@ -506,14 +506,14 @@ code{color:#1d4ed8;background:#eff6ff;border-radius:6px;padding:.1rem .35rem}
 .prayer-logo{display:block;max-width:clamp(160px,14vw,280px);max-height:clamp(62px,9vh,118px);object-fit:contain;filter:drop-shadow(0 12px 24px rgba(0,0,0,.22))}
 .prayer-logo[hidden]{display:none}
 .prayer-title-block{text-align:center;min-width:0}
-.prayer-city{color:var(--company-accent);font-weight:900;text-transform:uppercase;letter-spacing:.08em;font-size:clamp(12px,1.2vw,22px);margin-top:clamp(6px,.75vh,12px);white-space:nowrap}
-.prayer-head h1{margin:0;color:var(--display-text-strong);font-size:clamp(30px,4.6vw,78px);font-weight:950;line-height:.95}
+.prayer-city{color:var(--company-accent);font-weight:900;text-transform:uppercase;letter-spacing:.08em;font-size:clamp(12px,1.18vw,21px);margin-top:clamp(12px,1.45vh,24px);white-space:nowrap}
+.prayer-head h1{margin:0;color:var(--display-text-strong);font-size:clamp(28px,4vw,68px);font-weight:950;line-height:.95}
 .prayer-clock{display:grid;justify-items:end;color:var(--display-text-strong);line-height:1;padding-right:clamp(14px,2.4vw,44px)}
-.prayer-clock span{font-size:clamp(22px,3.25vw,56px);font-weight:900}
+.prayer-clock span{font-size:clamp(21px,2.9vw,50px);font-weight:900}
 .prayer-clock small{font-size:clamp(11px,1.12vw,20px);color:var(--display-text-soft)}
 .prayer-clock-meta{display:flex;align-items:center;justify-content:flex-end;gap:clamp(8px,1vw,16px);margin-top:clamp(4px,.6vh,8px);white-space:nowrap}
-.prayer-weather{display:flex;align-items:center;gap:10px;color:var(--display-text-strong);font-size:clamp(16px,1.55vw,30px);font-weight:950}
-.prayer-weather img{width:clamp(20px,1.75vw,34px);height:clamp(20px,1.75vw,34px);object-fit:contain}
+.prayer-weather{display:flex;align-items:center;gap:12px;color:var(--display-text-strong);font-size:clamp(18px,1.75vw,34px);font-weight:950}
+.prayer-weather img{width:clamp(28px,2.35vw,46px);height:clamp(28px,2.35vw,46px);object-fit:contain}
 .prayer-weather img[hidden]{display:none}
 .prayer-now{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:clamp(10px,2vw,24px);align-items:center;padding:clamp(12px,1.8vw,26px);border:1px solid rgba(56,189,248,.26);border-radius:8px;background:rgba(7,24,43,.68);box-shadow:0 24px 70px rgba(0,0,0,.22);min-width:0}
 .prayer-now span{color:var(--display-text-soft);font-weight:900;text-transform:uppercase;letter-spacing:.08em;font-size:clamp(11px,1.1vw,18px)}
