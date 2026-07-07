@@ -1009,7 +1009,7 @@ function updatePrayerCountdowns() {
   const now = Date.now();
   const events = Array.isArray(prayerState.events) ? prayerState.events : [];
   const next = events.find(event => new Date(event.at).getTime() >= now);
-  $('nextPrayerName').textContent = next ? `${next.prayer} ${next.type === 'iqama' ? 'Iqama' : 'Adhan'}` : '--';
+  $('nextPrayerName').textContent = next ? `${next.prayer} ${next.type === 'iqama' ? 'Iqama' : 'Prayer'}` : '--';
   $('nextPrayerCountdown').textContent = next ? formatDuration(new Date(next.at).getTime() - now) : '--:--:--';
   const recentAdhan = [...events].reverse().find(event => event.type === 'adhan' && now >= new Date(event.at).getTime());
   const nextIqama = recentAdhan ? events.find(event => event.type === 'iqama' && event.prayer === recentAdhan.prayer && new Date(event.at).getTime() >= now) : null;
