@@ -146,8 +146,11 @@ function render(payload) {
   if (company.logo) {
     $('logo').src = company.logo;
     $('logo').hidden = false;
+    $('prayerLogo').src = company.logo;
+    $('prayerLogo').hidden = false;
   } else {
     $('logo').hidden = true;
+    $('prayerLogo').hidden = true;
   }
 
   if (payload.display && payload.display.displayMode === 'overview') {
