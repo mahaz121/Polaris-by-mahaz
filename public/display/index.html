@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Office Display</title>
-  <link href="/css/styles.css?v=20260707-prayer-frame-responsive" rel="stylesheet">
+  <link href="/css/styles.css?v=20260707-prayer-header-weather" rel="stylesheet">
 </head>
 <body class="display-body cursor-none">
   <div class="offline" id="offline"><div><h1>Connection Lost</h1><p>Trying to reconnect...</p></div></div>
@@ -66,25 +66,6 @@
       <div id="prayerBlock" class="prayer-board" hidden>
         <div class="prayer-frame-border prayer-frame-border-outer"></div>
         <div class="prayer-frame-border prayer-frame-border-inner"></div>
-        <svg class="prayer-corner-pattern prayer-corner-top-left" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-          <path d="M0,100 C60,100 100,60 100,0 L0,0 Z"></path>
-          <path d="M0,94 C56,94 94,56 94,0"></path>
-          <g>
-            <path d="M0,0 L100,0 M0,0 L0,100 M0,20 L20,0 M0,40 L40,0 M0,60 L60,0 M0,80 L80,0 M0,100 L100,0"></path>
-            <path d="M20,0 C20,30 30,20 0,20 M40,0 C40,40 40,40 0,40 M60,0 C60,50 50,60 0,60"></path>
-            <polygon points="10,10 25,5 40,10 45,25 40,40 25,45 10,40 5,25"></polygon>
-            <polygon points="25,25 50,10 75,25 60,50 75,75 50,60 25,75 40,50"></polygon>
-          </g>
-        </svg>
-        <svg class="prayer-corner-pattern prayer-corner-bottom-right" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-          <path d="M0,100 C60,100 100,60 100,0 L0,0 Z"></path>
-          <path d="M0,94 C56,94 94,56 94,0"></path>
-          <g>
-            <path d="M0,0 L100,0 M0,0 L0,100 M0,20 L20,0 M0,40 L40,0 M0,60 L60,0 M0,80 L80,0 M0,100 L100,0"></path>
-            <polygon points="10,10 25,5 40,10 45,25 40,40 25,45 10,40 5,25"></polygon>
-            <polygon points="25,25 50,10 75,25 60,50 75,75 50,60 25,75 40,50"></polygon>
-          </g>
-        </svg>
         <svg class="prayer-side-mandala prayer-mandala-left" viewBox="0 0 100 200" aria-hidden="true">
           <g>
             <circle cx="0" cy="100" r="20"></circle>
@@ -108,11 +89,18 @@
           </g>
         </svg>
         <div class="prayer-head">
-          <div>
+          <div class="prayer-head-spacer" aria-hidden="true"></div>
+          <div class="prayer-title-block">
             <div id="prayerCity" class="prayer-city"></div>
             <h1 id="prayerTitle">Prayer Times</h1>
           </div>
-          <div class="prayer-clock"><span id="prayerClock"></span><small id="prayerDate"></small></div>
+          <div class="prayer-clock">
+            <span id="prayerClock"></span>
+            <div class="prayer-clock-meta">
+              <small id="prayerDate"></small>
+              <div class="prayer-weather"><img id="prayerWeatherIcon" hidden alt=""><b id="prayerWeatherText"></b></div>
+            </div>
+          </div>
         </div>
         <div class="prayer-now">
           <span>Next Prayer</span>
@@ -121,7 +109,6 @@
         </div>
         <div id="prayerTimesGrid" class="prayer-times-grid"></div>
         <div class="prayer-footer">
-          <div class="overview-weather"><img id="prayerWeatherIcon" hidden alt=""><span id="prayerWeatherText"></span></div>
           <div id="iqamaCountdown" class="iqama-countdown"></div>
         </div>
       </div>
@@ -159,6 +146,6 @@
   </div>
   <audio id="prayerAudio"></audio>
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/js/display.js?v=20260707-prayer-frame-responsive"></script>
+  <script src="/js/display.js?v=20260707-prayer-header-weather"></script>
 </body>
 </html>
