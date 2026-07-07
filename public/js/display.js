@@ -6,6 +6,7 @@ let weather = null;
 let currentPayload = null;
 let prayerState = null;
 let prayerOverlayTimer = null;
+let offlineTimer = null;
 let overviewRotationTimer = null;
 let overviewRotationIndex = 0;
 let orgState = {
@@ -112,6 +113,19 @@ function register() {
   socket.emit('register-display', { displayId, resolution: `${screen.width}x${screen.height}` });
 }
 
+function hideOffline() {
+  clearTimeout(offlineTimer);
+  offlineTimer = null;
+  $('offline').classList.remove('show');
+}
+
+function scheduleOffline(delayMs = 6000) {
+  clearTimeout(offlineTimer);
+  offlineTimer = setTimeout(() => {
+    if (!currentPayload || !socket.connected) $('offline').classList.add('show');
+  }, delayMs);
+}
+
 async function loadData() {
   const res = await fetch(`/api/display-public/${displayId}/data`, { cache: 'no-store' });
   if (!res.ok) throw new Error('Display not found');
@@ -119,15 +133,15 @@ async function loadData() {
 }
 
 socket.on('connect', () => {
-  $('offline').classList.remove('show');
+  hideOffline();
   register();
 });
-socket.on('disconnect', () => $('offline').classList.add('show'));
-socket.io.on('reconnect_attempt', () => $('offline').classList.add('show'));
-socket.io.on('reconnect', () => loadData().catch(() => $('offline').classList.add('show')));
+socket.on('disconnect', () => scheduleOffline(currentPayload ? 10000 : 2000));
+socket.io.on('reconnect_attempt', () => scheduleOffline(currentPayload ? 10000 : 2000));
+socket.io.on('reconnect', () => loadData().then(hideOffline).catch(() => scheduleOffline(2000)));
 socket.on('display-data', render);
 socket.on('weather-update', data => { weather = data; renderWeather(); });
-socket.on('company-profile-changed', () => loadData().catch(() => $('offline').classList.add('show')));
+socket.on('company-profile-changed', () => loadData().then(hideOffline).catch(() => scheduleOffline(2000)));
 socket.on('prayer-event', showPrayerEvent);
 
 function render(payload) {
@@ -1033,4 +1047,4 @@ function tick() {
 }
 
 setInterval(tick, 1000);
-loadData().catch(() => $('offline').classList.add('show'));
+loadData().then(hideOffline).catch(() => scheduleOffline(1000));

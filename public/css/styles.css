@@ -502,8 +502,8 @@ code{color:#1d4ed8;background:#eff6ff;border-radius:6px;padding:.1rem .35rem}
 .prayer-mandala-right{right:calc(-1 * clamp(90px,8vw,150px));transform:translateY(-50%) scaleX(-1)}
 .prayer-head{display:grid;grid-template-columns:minmax(170px,1fr) minmax(280px,1.55fr) minmax(220px,1fr);align-items:start;gap:clamp(12px,2vw,24px);min-width:0}
 .prayer-footer{display:flex;align-items:center;justify-content:flex-end;gap:clamp(12px,2vw,24px);min-width:0}
-.prayer-logo-wrap{display:flex;align-items:flex-start;justify-content:flex-start;min-width:0;padding-left:clamp(8px,1.6vw,30px);padding-top:clamp(4px,.8vh,14px)}
-.prayer-logo{display:block;max-width:clamp(120px,11vw,210px);max-height:clamp(46px,7vh,92px);object-fit:contain;filter:drop-shadow(0 12px 24px rgba(0,0,0,.22))}
+.prayer-logo-wrap{display:flex;align-items:flex-start;justify-content:flex-start;min-width:0;padding-left:clamp(42px,5.2vw,104px);padding-top:clamp(10px,1.4vh,22px)}
+.prayer-logo{display:block;max-width:clamp(160px,14vw,280px);max-height:clamp(62px,9vh,118px);object-fit:contain;filter:drop-shadow(0 12px 24px rgba(0,0,0,.22))}
 .prayer-logo[hidden]{display:none}
 .prayer-title-block{text-align:center;min-width:0}
 .prayer-city{color:var(--company-accent);font-weight:900;text-transform:uppercase;letter-spacing:.08em;font-size:clamp(13px,1.5vw,28px)}
@@ -521,6 +521,7 @@ code{color:#1d4ed8;background:#eff6ff;border-radius:6px;padding:.1rem .35rem}
 .prayer-now em{font-style:normal;color:var(--company-accent);font-size:clamp(24px,4.4vw,72px);font-weight:950;white-space:nowrap}
 .prayer-times-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:clamp(8px,1.2vw,18px);align-items:stretch;min-height:0}
 .prayer-time-card{display:grid;align-content:center;justify-items:center;gap:clamp(6px,1vh,12px);min-height:0;border:1px solid rgba(56,189,248,.24);border-radius:8px;background:linear-gradient(145deg,rgba(8,22,42,.78),rgba(4,16,31,.62));box-shadow:0 18px 55px rgba(0,0,0,.24);padding:clamp(10px,1.4vw,22px)}
+.prayer-time-card:last-child{border-bottom-right-radius:clamp(78px,7vw,138px)}
 .prayer-time-card span{color:var(--display-text-soft);font-size:clamp(13px,1.65vw,28px);font-weight:900;text-transform:uppercase;letter-spacing:.08em}
 .prayer-time-card strong{color:var(--display-text-strong);font-size:clamp(28px,4.2vw,74px);font-weight:950}
 .iqama-countdown{color:var(--company-accent);font-size:clamp(16px,2vw,36px);font-weight:900}
@@ -611,7 +612,7 @@ code{color:#1d4ed8;background:#eff6ff;border-radius:6px;padding:.1rem .35rem}
   .prayer-clock{justify-items:start;padding-right:0}
   .prayer-clock-meta{display:grid;gap:6px;justify-items:start}
   .prayer-times-grid{grid-template-columns:1fr}
-  .prayer-time-card:last-child{grid-column:auto}
+  .prayer-time-card:last-child{grid-column:auto;border-bottom-right-radius:42px}
   .prayer-frame-border-outer{border-top-left-radius:56px;border-bottom-right-radius:56px}
   .prayer-frame-border-inner{border-top-left-radius:50px;border-bottom-right-radius:50px}
 }
