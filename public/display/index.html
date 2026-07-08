@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Office Display</title>
-  <link href="/css/styles.css?v=20260707-prayer-info-corner" rel="stylesheet">
+  <link href="/css/styles.css?v=20260708-notice-board-text-fix" rel="stylesheet">
 </head>
 <body class="display-body cursor-none">
   <div class="offline" id="offline"><div><h1>Connection Lost</h1><p>Trying to reconnect...</p></div></div>
@@ -112,6 +112,28 @@
           <div id="iqamaCountdown" class="iqama-countdown"></div>
         </div>
       </div>
+      <div id="noticeBoardBlock" class="notice-board-display" hidden>
+        <header class="notice-board-head">
+          <div class="notice-board-brand">
+            <img id="noticeLogo" class="notice-board-logo" hidden alt="">
+          </div>
+          <div class="notice-board-title-wrap">
+            <div class="notice-board-title" id="noticeTitle">Notice Board</div>
+            <div class="notice-board-subtitle" id="noticeSubtitle"></div>
+          </div>
+          <div class="notice-board-status">
+            <strong id="noticeClock" class="notice-clock"></strong>
+            <div>
+              <span class="notice-weather"><img id="noticeWeatherIcon" hidden alt=""><b id="noticeWeatherText"></b></span>
+            </div>
+          </div>
+        </header>
+        <div id="noticePairGrid" class="notice-pair-grid"></div>
+        <div class="notice-board-nav" hidden>
+          <button id="noticePrev" type="button" aria-label="Previous notices"><i>&lsaquo;</i></button>
+          <button id="noticeNext" type="button" aria-label="Next notices"><i>&rsaquo;</i></button>
+        </div>
+      </div>
       <div id="employeeBlock" class="employee-grid">
         <div class="portrait-wrap">
           <img id="empPhoto" class="employee-photo" hidden alt="">
@@ -146,6 +168,6 @@
   </div>
   <audio id="prayerAudio"></audio>
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/js/display.js?v=20260707-prayer-info-corner"></script>
+  <script src="/js/display.js?v=20260708-notice-board-text-fix"></script>
 </body>
 </html>

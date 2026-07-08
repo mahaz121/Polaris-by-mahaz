@@ -15,6 +15,7 @@ const authRoutes = require('./routes/auth');
 const employeeRoutes = require('./routes/employees');
 const departmentRoutes = require('./routes/departments');
 const displayRoutes = require('./routes/displays');
+const noticeRoutes = require('./routes/notices');
 const settingsRoutes = require('./routes/settings');
 const companyProfileRoutes = require('./routes/companyProfiles');
 const { router: weatherRoutes, fetchWeather } = require('./routes/weather');
@@ -59,6 +60,13 @@ app.use('/css', express.static(path.join(root, 'public', 'css')));
 app.use('/js', express.static(path.join(root, 'public', 'js')));
 app.use('/images', express.static(path.join(root, 'public', 'images')));
 app.use('/Logo', express.static(path.join(root, 'public', 'Logo')));
+app.use('/vendor/pdfjs', express.static(path.join(root, 'public', 'vendor', 'pdfjs'), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.mjs')) res.type('application/javascript');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  }
+}));
 app.use('/uploads', express.static(path.join(root, 'public', 'uploads'), {
   setHeaders: res => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -128,6 +136,7 @@ app.get('/api/setup/displays', requirePermission('display.access'), async (req, 
 app.use('/api/employees', requireAnyPermission(['employees.view', 'employeeStatus.view', 'employees.manage', 'displays.manage']), employeeRoutes);
 app.use('/api/departments', requirePermission('employees.manage'), departmentRoutes);
 app.use('/api/displays', requirePermission('displays.manage'), displayRoutes);
+app.use('/api/notices', requirePermission('displays.manage'), noticeRoutes);
 app.use('/api/settings', requirePermission('weather.manage'), settingsRoutes);
 app.use('/api/weather', requirePermission('weather.manage'), weatherRoutes);
 app.use('/api/prayer', requireAnyPermission(['prayer.manage', 'displays.manage']), prayerRoutes);
@@ -136,6 +145,7 @@ app.use('/api/zkteco', requirePermission('zkteco.manage'), zktecoRoutes);
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 app.use((err, req, res, next) => {
+  if (err && err.statusCode) return res.status(err.statusCode).json({ error: err.message || 'Request failed' });
   if (err && (err.code === 'LIMIT_FILE_SIZE' || err.code === 'LIMIT_FILE_COUNT' || err.message === 'Unsupported file type')) {
     return res.status(400).json({ error: err.message || 'Invalid upload' });
   }

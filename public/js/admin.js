@@ -5,7 +5,7 @@ const modal = new bootstrap.Modal(modalEl);
 const socket = io();
 
 const statuses = ['Available', 'Not Available'];
-let state = { employees: [], displays: [], departments: [], settings: {}, users: [], devices: [], timesheet: null, companyProfiles: [], prayerProfiles: [], dashboard: null, me: null };
+let state = { employees: [], displays: [], departments: [], settings: {}, users: [], devices: [], timesheet: null, companyProfiles: [], prayerProfiles: [], notices: [], dashboard: null, me: null };
 let csrfToken = '';
 
 const permissionOptions = [
@@ -37,6 +37,7 @@ const pagePermissions = {
   dashboard: ['dashboard.view'],
   employees: ['employees.view', 'employeeStatus.view', 'employees.manage'],
   displays: 'displays.manage',
+  notices: 'displays.manage',
   'company-profiles': 'companyProfiles.manage',
   'company-profile': 'companyProfiles.manage',
   weather: 'weather.manage',
@@ -45,7 +46,7 @@ const pagePermissions = {
   users: 'users.manage',
   'about-developer': null
 };
-const navPageKeys = ['dashboard', 'employees', 'displays', 'company-profiles', 'weather', 'prayer', 'zkteco', 'users', 'about-developer'];
+const navPageKeys = ['dashboard', 'employees', 'displays', 'notices', 'company-profiles', 'weather', 'prayer', 'zkteco', 'users', 'about-developer'];
 
 const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function randomSecret(bytes = 32) {
@@ -168,6 +169,33 @@ async function api(url, opt = {}) {
   return data;
 }
 
+async function uploadWithProgress(url, method, formData, onProgress) {
+  if (!csrfToken) {
+    const csrfRes = await fetch('/api/auth/csrf', { credentials: 'same-origin' });
+    if (csrfRes.ok) csrfToken = (await csrfRes.json()).csrfToken || '';
+  }
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(method, url);
+    xhr.withCredentials = true;
+    if (csrfToken) xhr.setRequestHeader('X-CSRF-Token', csrfToken);
+    xhr.upload.onprogress = event => {
+      if (event.lengthComputable && typeof onProgress === 'function') {
+        onProgress(Math.round((event.loaded / event.total) * 100));
+      }
+    };
+    xhr.onload = () => {
+      let data = null;
+      try { data = JSON.parse(xhr.responseText || 'null'); } catch {}
+      if (xhr.status >= 200 && xhr.status < 300) return resolve(data);
+      if (xhr.status === 401) location.href = '/admin/login.html';
+      reject(new Error((data && data.error) || `Upload failed: ${xhr.status}`));
+    };
+    xhr.onerror = () => reject(new Error('Upload failed'));
+    xhr.send(formData);
+  });
+}
+
 function toast(message, type = 'success') {
   $('#toastArea').innerHTML = `<div class="alert alert-${type} shadow-sm py-2 px-3 mb-2">${esc(message)}</div>`;
   setTimeout(() => { $('#toastArea').innerHTML = ''; }, 3500);
@@ -234,7 +262,7 @@ async function load() {
   const currentPermissions = permissionsFor(currentUser);
   const can = permission => currentPermissions.includes(permission);
   const timesheetDate = sessionStorage.getItem('polaris_timesheet_date') || new Date().toISOString().slice(0, 10);
-  const [dashboardData, employees, displays, departments, settings, users, devices, timesheet, companyProfiles, prayerProfiles] = await Promise.all([
+  const [dashboardData, employees, displays, departments, settings, users, devices, timesheet, companyProfiles, prayerProfiles, notices] = await Promise.all([
     can('dashboard.view') ? api('/api/dashboard') : Promise.resolve(null),
     can('employees.view') || can('employeeStatus.view') || can('employees.manage') || can('displays.manage') ? api('/api/employees') : Promise.resolve([]),
     can('displays.manage') ? api('/api/displays') : Promise.resolve([]),
@@ -244,7 +272,8 @@ async function load() {
     can('zkteco.manage') ? api('/api/zkteco/devices') : Promise.resolve([]),
     can('employees.manage') || can('employeeStatus.view') ? api(`/api/timesheet?date=${encodeURIComponent(timesheetDate)}`) : Promise.resolve(null),
     can('companyProfiles.manage') ? api('/api/company-profiles') : Promise.resolve([]),
-    can('prayer.manage') || can('displays.manage') ? api('/api/prayer/profiles') : Promise.resolve([])
+    can('prayer.manage') || can('displays.manage') ? api('/api/prayer/profiles') : Promise.resolve([]),
+    can('displays.manage') ? api('/api/notices') : Promise.resolve([])
   ]);
   state = {
     employees: Array.isArray(employees) ? employees : [],
@@ -256,6 +285,7 @@ async function load() {
     timesheet: timesheet || null,
     companyProfiles: Array.isArray(companyProfiles) ? companyProfiles : [],
     prayerProfiles: Array.isArray(prayerProfiles) ? prayerProfiles : [],
+    notices: Array.isArray(notices) ? notices : [],
     dashboard: dashboardData || null,
     me: currentUser
   };
@@ -285,7 +315,7 @@ async function route() {
       page = fallback;
     }
     document.body.dataset.adminPage = page;
-    ({ dashboard, employees, displays, 'company-profiles': renderCompanyProfiles, 'company-profile': renderCompanyProfiles, weather, prayer, zkteco, users, 'about-developer': aboutDeveloper }[page] || dashboard)();
+    ({ dashboard, employees, displays, notices, 'company-profiles': renderCompanyProfiles, 'company-profile': renderCompanyProfiles, weather, prayer, zkteco, users, 'about-developer': aboutDeveloper }[page] || dashboard)();
   } catch (err) {
     content.innerHTML = `<div class="alert alert-danger"><h5>Admin Error</h5><p>${esc(err.message)}</p></div>`;
   }
@@ -797,6 +827,139 @@ function bindDisplayActions() {
   });
 }
 
+function noticeFileName(path) {
+  return String(path || '').split('/').pop() || '';
+}
+
+function noticeTable() {
+  return `<table class="table table-hover align-middle mb-0"><thead><tr><th>Order</th><th>Title</th><th>Effective</th><th>English PDF</th><th>Arabic PDF</th><th></th></tr></thead><tbody>
+    ${state.notices.map(notice => `<tr>
+      <td>${esc(notice.displayOrder)}</td>
+      <td><strong>${esc(notice.title)}</strong></td>
+      <td>${esc(notice.effectiveDate)}</td>
+      <td>${notice.englishPdfFile ? `<a href="${esc(notice.englishPdfFile)}" target="_blank">${esc(noticeFileName(notice.englishPdfFile))}</a>` : '-'}</td>
+      <td>${notice.arabicPdfFile ? `<a href="${esc(notice.arabicPdfFile)}" target="_blank">${esc(noticeFileName(notice.arabicPdfFile))}</a>` : '-'}</td>
+      <td class="text-end">
+        <button class="btn btn-sm btn-outline-primary edit-notice" data-id="${esc(notice.id)}" title="Edit"><i class="bi bi-pencil"></i></button>
+        <button class="btn btn-sm btn-outline-danger del-notice" data-id="${esc(notice.id)}" title="Delete"><i class="bi bi-trash"></i></button>
+      </td>
+    </tr>`).join('') || '<tr><td colspan="6" class="text-muted">No notices uploaded yet.</td></tr>'}
+  </tbody></table>`;
+}
+
+function notices() {
+  setTitle('Notice Board');
+  content.innerHTML = `
+    <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+      <div class="text-muted">Bilingual notices are shown two at a time on Notice Board displays.</div>
+      <button class="btn btn-primary btn-rounded" id="addNoticeBtn"><i class="bi bi-plus-lg"></i> Add Notice</button>
+    </div>
+    <div class="card table-card">${noticeTable()}</div>`;
+  $('#addNoticeBtn').onclick = () => noticeForm();
+  document.querySelectorAll('.edit-notice').forEach(button => button.onclick = () => noticeForm(button.dataset.id));
+  document.querySelectorAll('.del-notice').forEach(button => button.onclick = () => deleteNotice(button.dataset.id));
+}
+
+function noticeDropZone(name, label, existing = '') {
+  return `<div class="notice-upload-zone" data-file-zone="${esc(name)}" tabindex="0">
+    <input name="${esc(name)}" type="file" accept="application/pdf" class="notice-file-input" ${existing ? '' : 'required'}>
+    <div class="notice-upload-icon"><i class="bi bi-file-earmark-pdf"></i></div>
+    <div>
+      <strong>${esc(label)}</strong>
+      <span class="notice-file-label">${existing ? esc(noticeFileName(existing)) : 'Drop PDF here or choose file'}</span>
+      <small>PDF only, maximum 10 MB</small>
+    </div>
+    ${existing ? `<a href="${esc(existing)}" target="_blank" class="btn btn-sm btn-outline-secondary">Preview</a>` : ''}
+  </div>`;
+}
+
+function bindNoticeDropZones() {
+  document.querySelectorAll('.notice-upload-zone').forEach(zone => {
+    const input = zone.querySelector('.notice-file-input');
+    const label = zone.querySelector('.notice-file-label');
+    const setFile = file => {
+      if (!file) return;
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      input.files = transfer.files;
+      label.textContent = file.name;
+      zone.classList.add('has-file');
+    };
+    input.onchange = () => {
+      const file = input.files && input.files[0];
+      if (file) {
+        label.textContent = file.name;
+        zone.classList.add('has-file');
+      }
+    };
+    zone.onclick = event => {
+      if (event.target.tagName !== 'A') input.click();
+    };
+    zone.ondragover = event => {
+      event.preventDefault();
+      zone.classList.add('drag-over');
+    };
+    zone.ondragleave = () => zone.classList.remove('drag-over');
+    zone.ondrop = event => {
+      event.preventDefault();
+      zone.classList.remove('drag-over');
+      setFile(event.dataTransfer.files && event.dataTransfer.files[0]);
+    };
+  });
+}
+
+function validateNoticeFile(file, label) {
+  if (!file) return;
+  if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) throw new Error(`${label} must be a PDF file.`);
+  if (file.size > 10 * 1024 * 1024) throw new Error(`${label} must be 10 MB or smaller.`);
+}
+
+function noticeForm(id = '') {
+  const notice = state.notices.find(item => item.id === id) || {};
+  $('#modalTitle').textContent = id ? 'Edit Notice' : 'Add Notice';
+  $('#modalBody').innerHTML = `<form id="noticeForm">
+    <label class="form-label">Title</label><input name="title" class="form-control mb-3" required maxlength="160" value="${esc(notice.title)}">
+    <div class="row g-3 mb-3">
+      <div class="col-md-8"><label class="form-label">Effective Date</label><input name="effectiveDate" type="date" class="form-control" required value="${esc(notice.effectiveDate || todayInputValue())}"></div>
+      <div class="col-md-4"><label class="form-label">Display Order</label><input name="displayOrder" type="number" min="0" class="form-control" value="${esc(notice.displayOrder || 0)}"></div>
+    </div>
+    <div class="notice-upload-grid">
+      ${noticeDropZone('englishPdfFile', 'English PDF', notice.englishPdfFile)}
+      ${noticeDropZone('arabicPdfFile', 'Arabic PDF', notice.arabicPdfFile)}
+    </div>
+    <div class="progress notice-upload-progress mt-3" hidden><div class="progress-bar" style="width:0%">0%</div></div>
+    <button class="btn btn-primary mt-3">Save Notice</button>
+  </form>`;
+  modal.show();
+  bindNoticeDropZones();
+  $('#noticeForm').onsubmit = async event => {
+    event.preventDefault();
+    const form = event.target;
+    const english = form.englishPdfFile.files[0];
+    const arabic = form.arabicPdfFile.files[0];
+    validateNoticeFile(english, 'English PDF');
+    validateNoticeFile(arabic, 'Arabic PDF');
+    const progress = form.querySelector('.notice-upload-progress');
+    const bar = progress.querySelector('.progress-bar');
+    progress.hidden = false;
+    const data = new FormData(form);
+    await uploadWithProgress(id ? `/api/notices/${id}` : '/api/notices', id ? 'PUT' : 'POST', data, percent => {
+      bar.style.width = `${percent}%`;
+      bar.textContent = `${percent}%`;
+    });
+    modal.hide();
+    toast('Notice saved');
+    route();
+  };
+}
+
+async function deleteNotice(id) {
+  if (!await confirmDelete('Delete Notice?')) return;
+  await api('/api/notices/' + id, { method: 'DELETE' });
+  toast('Notice deleted');
+  route();
+}
+
 async function copyText(value) {
   if (navigator.clipboard && window.isSecureContext) {
     try {
@@ -1056,8 +1219,12 @@ function displayForm(id = '') {
   $('#modalBody').innerHTML = `<form id="displayForm">
     <label class="form-label">Display Name</label><input name="name" class="form-control mb-3" required value="${esc(d.name)}">
     <label class="form-label">Display ID</label><input name="id" class="form-control mb-3" ${id ? 'readonly' : ''} required value="${esc(d.id)}">
-    <label class="form-label">Display Mode</label><select name="displayMode" id="displayMode" class="form-select mb-3"><option value="single" ${!['overview', 'orgchart', 'prayer'].includes(d.displayMode) ? 'selected' : ''}>Single Employee Sign</option><option value="overview" ${d.displayMode === 'overview' ? 'selected' : ''}>Large Screen Employee Board</option><option value="orgchart" ${d.displayMode === 'orgchart' ? 'selected' : ''}>Organization Chart</option><option value="prayer" ${d.displayMode === 'prayer' ? 'selected' : ''}>Prayer Times Screen</option></select>
+    <label class="form-label">Display Mode</label><select name="displayMode" id="displayMode" class="form-select mb-3"><option value="single" ${!['overview', 'orgchart', 'prayer', 'noticeBoard'].includes(d.displayMode) ? 'selected' : ''}>Single Employee Sign</option><option value="overview" ${d.displayMode === 'overview' ? 'selected' : ''}>Large Screen Employee Board</option><option value="orgchart" ${d.displayMode === 'orgchart' ? 'selected' : ''}>Organization Chart</option><option value="prayer" ${d.displayMode === 'prayer' ? 'selected' : ''}>Prayer Times Screen</option><option value="noticeBoard" ${d.displayMode === 'noticeBoard' ? 'selected' : ''}>Notice Board</option></select>
     <label class="form-label">Display Group</label><input name="displayGroup" class="form-control mb-3" placeholder="Open Area, Women Section" value="${esc(d.displayGroup)}">
+    <div id="noticeBoardFields" class="table-card p-3 mb-3">
+      <label class="form-label">Notice Board Title</label><input name="noticeBoardTitle" class="form-control" maxlength="80" value="${esc(d.noticeBoardTitle || 'Notice Board')}">
+      <div class="form-text">This title appears above the notices.</div>
+    </div>
     <div class="row g-3 mb-3">
       <div class="col-md-6"><label class="form-label">Room Number</label><input name="roomNumber" class="form-control" placeholder="example: 102" value="${esc(d.roomNumber)}"></div>
       <div class="col-md-6 d-flex align-items-end"><div class="form-check mb-2"><input name="showRoomNumber" id="showRoomNumber" type="checkbox" class="form-check-input" ${d.showRoomNumber ? 'checked' : ''}><label for="showRoomNumber" class="form-check-label">Show Room Number</label></div></div>
@@ -1066,13 +1233,13 @@ function displayForm(id = '') {
       <div class="col-md-6 d-flex align-items-end"><div class="form-check mb-2"><input name="showCubicleNumber" id="showCubicleNumber" type="checkbox" class="form-check-input" ${d.showCubicleNumber ? 'checked' : ''}><label for="showCubicleNumber" class="form-check-label">Show Cubicle Number</label></div></div>
     </div>
     <div id="overviewRotationFields" class="table-card p-3 mb-3">
-      <div class="form-check mb-3"><input name="overviewShowCompanyName" id="overviewShowCompanyName" type="checkbox" class="form-check-input" ${d.overviewShowCompanyName === false ? '' : 'checked'}><label for="overviewShowCompanyName" class="form-check-label">Show company name in overview header</label></div>
-      <div class="overview-layout-settings mb-3">
+      <div class="form-check mb-3 overview-only-field"><input name="overviewShowCompanyName" id="overviewShowCompanyName" type="checkbox" class="form-check-input" ${d.overviewShowCompanyName === false ? '' : 'checked'}><label for="overviewShowCompanyName" class="form-check-label">Show company name in overview header</label></div>
+      <div class="overview-layout-settings mb-3 overview-only-field">
         <label class="form-label">Department Order</label>
         ${departmentOrderEditor(overviewOrderRows, 'overview-department-row', 'overview-department-name', 'overview-department-order')}
         <div class="form-text">This order applies only to this overview display.</div>
       </div>
-      <div class="form-check mb-3"><input name="rotateCompanyProfiles" id="rotateCompanyProfiles" type="checkbox" class="form-check-input" ${d.rotateCompanyProfiles ? 'checked' : ''}><label for="rotateCompanyProfiles" class="form-check-label">Brand rotation enabled</label></div>
+      <div class="form-check mb-3"><input name="rotateCompanyProfiles" id="rotateCompanyProfiles" type="checkbox" class="form-check-input" ${d.rotateCompanyProfiles ? 'checked' : ''}><label for="rotateCompanyProfiles" class="form-check-label">Multi-company logo rotation</label></div>
       <label class="form-label">Brand rotation interval seconds</label><input name="rotationIntervalSeconds" type="number" min="5" class="form-control mb-3" value="${esc(d.rotationIntervalSeconds || 30)}">
       <label class="form-label">Company profiles to rotate</label>
       <div class="rotation-profile-list">
@@ -1082,7 +1249,7 @@ function displayForm(id = '') {
           <span>${esc(profile.name || 'Unnamed profile')}</span>
         </label>`).join('') || '<div class="text-muted small">No company profiles available.</div>'}
       </div>
-      <div class="form-text mt-2">If no profiles are selected, the active company profile will be used.</div>
+      <div class="form-text mt-2">For Notice Board: enable rotation for multi-company mode, or leave it off and select one company for a fixed logo. If no profile is selected, the active company profile is used.</div>
     </div>
     <div id="orgChartFields" class="table-card p-3 mb-3">
       <div class="row g-3">
@@ -1116,11 +1283,16 @@ function displayForm(id = '') {
   const syncOverviewRotationFields = () => {
     const mode = $('#displayMode').value;
     const isOverview = mode === 'overview';
+    const isNoticeBoard = mode === 'noticeBoard';
     const isOrgChart = mode === 'orgchart';
-    $('#overviewRotationFields').hidden = !isOverview;
+    $('#overviewRotationFields').hidden = !(isOverview || isNoticeBoard);
+    $('#noticeBoardFields').hidden = !isNoticeBoard;
     $('#orgChartFields').hidden = !isOrgChart;
     $('#singleEmployeeFields').hidden = mode !== 'single';
     $('#prayerDisplayFields').hidden = mode !== 'prayer';
+    document.querySelectorAll('.overview-only-field').forEach(item => { item.hidden = !isOverview; });
+    const intervalInput = document.querySelector('[name="rotationIntervalSeconds"]');
+    if (intervalInput && isNoticeBoard && (!intervalInput.value || Number(intervalInput.value) < 60)) intervalInput.value = d.rotationIntervalSeconds || 300;
     document.querySelectorAll('.single-display-option').forEach(item => { item.hidden = mode !== 'single'; });
   };
   $('#displayMode').onchange = syncOverviewRotationFields;
@@ -1147,13 +1319,19 @@ function displayForm(id = '') {
       .slice()
       .sort((a, b) => (a.displayOrder || Number.MAX_SAFE_INTEGER) - (b.displayOrder || Number.MAX_SAFE_INTEGER))
       .map(item => item.departmentName);
-    if (data.displayMode !== 'overview') {
+    if (data.displayMode !== 'overview' && data.displayMode !== 'noticeBoard') {
       data.rotateCompanyProfiles = false;
       data.rotationCompanyProfileIds = [];
       if (data.displayMode !== 'orgchart') data.overviewShowCompanyName = true;
       data.overviewDepartmentOrder = [];
       data.overviewDepartmentLayout = [];
     }
+    if (data.displayMode === 'noticeBoard') {
+      data.overviewShowCompanyName = true;
+      data.overviewDepartmentOrder = [];
+      data.overviewDepartmentLayout = [];
+    }
+    if (data.displayMode !== 'noticeBoard') data.noticeBoardTitle = '';
     if (data.displayMode !== 'prayer') data.prayerProfileId = '';
     if (data.displayMode !== 'orgchart') {
       data.orgChartRootMode = 'department_managers';

@@ -51,8 +51,9 @@ const employeeOrderByDepartment = value => {
     Array.isArray(ids) ? ids.map(id => String(id || '').trim()).filter(Boolean) : []
   ]).filter(([department]) => department));
 };
-const displayModeValue = value => ['overview', 'orgchart', 'prayer'].includes(value) ? value : 'single';
+const displayModeValue = value => ['overview', 'orgchart', 'prayer', 'noticeBoard'].includes(value) ? value : 'single';
 const rootModeValue = value => ['ceo', 'department_managers', 'custom'].includes(value) ? value : 'department_managers';
+const cleanTitle = value => String(value || '').trim().slice(0, 80);
 
 router.get('/', async (req, res) => res.json(await readJson('displays.json', [])));
 router.get('/available', async (req, res) => res.json((await readJson('displays.json', [])).map(d => ({ id: d.id, name: d.name }))));
@@ -110,6 +111,7 @@ router.post('/', async (req, res) => {
     employeeId: displayMode === 'single' ? req.body.employeeId || '' : '',
     prayerProfileId: displayMode === 'prayer' ? req.body.prayerProfileId || '' : '',
     displayMode,
+    noticeBoardTitle: displayMode === 'noticeBoard' ? cleanTitle(req.body.noticeBoardTitle || 'Notice Board') : '',
     displayGroup: req.body.displayGroup || '',
     roomNumber: req.body.roomNumber || '',
     showRoomNumber: checked(req.body.showRoomNumber),
@@ -117,7 +119,7 @@ router.post('/', async (req, res) => {
     cubicleNumber: req.body.cubicleNumber || '',
     showCubicleNumber: checked(req.body.showCubicleNumber),
     rotateCompanyProfiles: checked(req.body.rotateCompanyProfiles),
-    rotationIntervalSeconds: rotationInterval(req.body.rotationIntervalSeconds),
+    rotationIntervalSeconds: displayMode === 'noticeBoard' ? Math.max(60, Number(req.body.rotationIntervalSeconds || 300) || 300) : rotationInterval(req.body.rotationIntervalSeconds),
     rotationCompanyProfileIds: rotationIds(req.body.rotationCompanyProfileIds),
     overviewShowCompanyName: req.body.overviewShowCompanyName === undefined ? true : checked(req.body.overviewShowCompanyName),
     overviewDepartmentOrder: jsonList(req.body.overviewDepartmentOrder),
@@ -155,6 +157,7 @@ router.put('/:id', async (req, res) => {
     employeeId: displayMode === 'single' ? req.body.employeeId || '' : '',
     prayerProfileId: displayMode === 'prayer' ? req.body.prayerProfileId || '' : '',
     displayMode,
+    noticeBoardTitle: displayMode === 'noticeBoard' ? cleanTitle(req.body.noticeBoardTitle || displays[idx].noticeBoardTitle || 'Notice Board') : '',
     displayGroup: req.body.displayGroup || '',
     roomNumber: req.body.roomNumber || '',
     showRoomNumber: checked(req.body.showRoomNumber),
@@ -162,7 +165,7 @@ router.put('/:id', async (req, res) => {
     cubicleNumber: req.body.cubicleNumber || '',
     showCubicleNumber: checked(req.body.showCubicleNumber),
     rotateCompanyProfiles: checked(req.body.rotateCompanyProfiles),
-    rotationIntervalSeconds: rotationInterval(req.body.rotationIntervalSeconds),
+    rotationIntervalSeconds: displayMode === 'noticeBoard' ? Math.max(60, Number(req.body.rotationIntervalSeconds || displays[idx].rotationIntervalSeconds || 300) || 300) : rotationInterval(req.body.rotationIntervalSeconds),
     rotationCompanyProfileIds: rotationIds(req.body.rotationCompanyProfileIds),
     overviewShowCompanyName: req.body.overviewShowCompanyName === undefined ? displays[idx].overviewShowCompanyName !== false : checked(req.body.overviewShowCompanyName),
     overviewDepartmentOrder: req.body.overviewDepartmentOrder === undefined ? displays[idx].overviewDepartmentOrder || [] : jsonList(req.body.overviewDepartmentOrder),

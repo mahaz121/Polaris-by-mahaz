@@ -137,6 +137,35 @@ function overviewRotationProfiles(display = {}) {
     .map(publicCompanyProfile);
 }
 
+function selectedCompanyProfiles(display = {}) {
+  const selected = new Set(Array.isArray(display.rotationCompanyProfileIds) ? display.rotationCompanyProfileIds : []);
+  if (!selected.size) return [];
+  return listCompanyProfiles(false)
+    .filter(profile => selected.has(profile.id))
+    .map(publicCompanyProfile);
+}
+
+function publicNotice(row = {}) {
+  return {
+    id: row.id,
+    title: row.title || '',
+    englishPdfFile: row.english_pdf || '',
+    arabicPdfFile: row.arabic_pdf || '',
+    effectiveDate: row.effective_date || '',
+    displayOrder: Number(row.display_order || 0)
+  };
+}
+
+function activeNotices() {
+  const today = new Date().toISOString().slice(0, 10);
+  return db.prepare(`
+    SELECT id, title, english_pdf, arabic_pdf, effective_date, display_order
+    FROM notice_board_notices
+    WHERE active = 1 AND effective_date <= ?
+    ORDER BY display_order ASC, effective_date DESC, title COLLATE NOCASE ASC
+  `).all(today).map(publicNotice);
+}
+
 async function buildDisplayPayload(displayId, includeQr = true) {
   const [employees, displays, departments, settings] = await Promise.all([
     readJson('employees.json', []),
@@ -146,6 +175,18 @@ async function buildDisplayPayload(displayId, includeQr = true) {
   ]);
   const display = displays.find(d => d.id === displayId);
   if (!display) return null;
+  if (display.displayMode === 'noticeBoard') {
+    return {
+      display,
+      employees: [],
+      employee: null,
+      settings: publicSettings(settings),
+      weather: settings.weather?.data || null,
+      qr: '',
+      notices: activeNotices(),
+      rotationCompanies: selectedCompanyProfiles(display)
+    };
+  }
   if (display.displayMode === 'orgchart') {
     const selectedIds = new Set(Array.isArray(display.orgChartSelectedEmployeeIds) ? display.orgChartSelectedEmployeeIds.filter(Boolean) : []);
     const employeesForChart = employees

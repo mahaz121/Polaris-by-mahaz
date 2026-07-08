@@ -97,16 +97,19 @@ function extensionFor(mime) {
     'audio/mp3': '.mp3',
     'audio/wav': '.wav',
     'audio/x-wav': '.wav',
-    'audio/ogg': '.ogg'
+    'audio/ogg': '.ogg',
+    'application/pdf': '.pdf'
   }[mime] || '.bin';
 }
 
 const IMAGE_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 const AUDIO_MIME_TYPES = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/ogg'];
+const PDF_MIME_TYPES = ['application/pdf'];
 
 module.exports = {
   AUDIO_MIME_TYPES,
   IMAGE_MIME_TYPES,
+  PDF_MIME_TYPES,
   corsOrigin,
   ensureCsrfToken,
   rateLimit,

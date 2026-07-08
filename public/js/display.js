@@ -9,6 +9,9 @@ let prayerOverlayTimer = null;
 let offlineTimer = null;
 let overviewRotationTimer = null;
 let overviewRotationIndex = 0;
+let noticeState = { notices: [], pairIndex: 0, timer: null, signature: '', renderedPairKey: '', logoTimer: null, logoIndex: 0, logoSignature: '' };
+let pdfLibraryPromise = null;
+let pdfRenderGeneration = 0;
 let orgState = {
   payload: null,
   focusId: '',
@@ -29,6 +32,95 @@ function initials(name) {
 
 function safeText(value) {
   return String(value == null ? '' : value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+}
+
+function safePdfPath(value) {
+  const path = String(value || '');
+  return /^\/uploads\/[a-zA-Z0-9._-]+\.pdf$/i.test(path) ? path : '';
+}
+
+async function loadPdfLibrary() {
+  if (!pdfLibraryPromise) {
+    pdfLibraryPromise = import('/vendor/pdfjs/pdf.min.mjs').then(pdfjs => {
+      pdfjs.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.mjs';
+      return pdfjs;
+    });
+  }
+  return pdfLibraryPromise;
+}
+
+async function renderPdfCanvas(canvas, generation) {
+  const source = canvas.dataset.pdfSrc || '';
+  const status = canvas.parentElement.querySelector('.notice-pdf-status');
+  try {
+    const response = await fetch(source, { credentials: 'same-origin', cache: 'force-cache' });
+    if (!response.ok) throw new Error(`PDF request failed (${response.status})`);
+    const pdfjs = await loadPdfLibrary();
+    const data = await response.arrayBuffer();
+    if (generation !== pdfRenderGeneration || !canvas.isConnected) return;
+    const documentTask = pdfjs.getDocument({
+      data,
+      disableFontFace: true,
+      useSystemFonts: false,
+      isEvalSupported: false,
+      enableScripting: false,
+      stopAtErrors: true,
+      cMapUrl: '/vendor/pdfjs/cmaps/',
+      cMapPacked: true,
+      standardFontDataUrl: '/vendor/pdfjs/standard_fonts/',
+      wasmUrl: '/vendor/pdfjs/wasm/'
+    });
+    const pdf = await documentTask.promise;
+    const page = await pdf.getPage(1);
+    if (generation !== pdfRenderGeneration || !canvas.isConnected) {
+      await pdf.destroy();
+      return;
+    }
+    const baseViewport = page.getViewport({ scale: 1 });
+    const frame = canvas.parentElement;
+    const availableWidth = Math.max(1, frame.clientWidth);
+    const availableHeight = Math.max(1, frame.clientHeight);
+    const cssScale = Math.min(
+      availableWidth / baseViewport.width,
+      availableHeight / baseViewport.height
+    );
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+    const renderViewport = page.getViewport({ scale: cssScale * pixelRatio });
+    canvas.width = Math.ceil(renderViewport.width);
+    canvas.height = Math.ceil(renderViewport.height);
+    canvas.style.width = `${Math.floor(baseViewport.width * cssScale)}px`;
+    canvas.style.height = `${Math.floor(baseViewport.height * cssScale)}px`;
+    const context = canvas.getContext('2d', { alpha: false });
+    await page.render({ canvasContext: context, viewport: renderViewport }).promise;
+    if (status) status.hidden = true;
+    await pdf.destroy();
+  } catch (error) {
+    console.error('Notice PDF rendering failed:', error);
+    if (status) {
+      status.hidden = false;
+      status.textContent = 'Unable to display PDF';
+    }
+  }
+}
+
+function renderNoticePdfs() {
+  const generation = ++pdfRenderGeneration;
+  requestAnimationFrame(() => {
+    document.querySelectorAll('#noticePairGrid canvas[data-pdf-src]').forEach(canvas => {
+      renderPdfCanvas(canvas, generation);
+    });
+  });
+}
+
+function stopNoticeRotation() {
+  if (noticeState.timer) clearInterval(noticeState.timer);
+  noticeState.timer = null;
+  stopNoticeLogoRotation();
+}
+
+function stopNoticeLogoRotation() {
+  if (noticeState.logoTimer) clearInterval(noticeState.logoTimer);
+  noticeState.logoTimer = null;
 }
 
 function hexToRgb(hex) {
@@ -172,15 +264,39 @@ function render(payload) {
     $('logo').hidden = false;
     $('prayerLogo').src = company.logo;
     $('prayerLogo').hidden = false;
+    $('noticeLogo').src = company.logo;
+    $('noticeLogo').hidden = false;
   } else {
     $('logo').hidden = true;
     $('prayerLogo').hidden = true;
+    $('noticeLogo').hidden = true;
+  }
+
+  if (payload.display && payload.display.displayMode === 'noticeBoard') {
+    $('shell').classList.add('notice-board-mode');
+    $('shell').classList.remove('overview-mode');
+    $('shell').classList.remove('org-chart-mode');
+    $('shell').classList.remove('prayer-mode');
+    if (overviewRotationTimer) clearInterval(overviewRotationTimer);
+    overviewRotationTimer = null;
+    $('overviewBlock').hidden = true;
+    $('orgChartBlock').hidden = true;
+    $('prayerBlock').hidden = true;
+    $('employeeBlock').hidden = true;
+    $('empty').hidden = true;
+    renderNoticeBoard(payload);
+    renderWeather();
+    tick();
+    return;
   }
 
   if (payload.display && payload.display.displayMode === 'overview') {
+    stopNoticeRotation();
     $('shell').classList.add('overview-mode');
     $('shell').classList.remove('org-chart-mode');
     $('shell').classList.remove('prayer-mode');
+    $('shell').classList.remove('notice-board-mode');
+    $('noticeBoardBlock').hidden = true;
     $('prayerBlock').hidden = true;
     $('orgChartBlock').hidden = true;
     renderOverview(payload);
@@ -190,14 +306,17 @@ function render(payload) {
   }
 
   if (payload.display && payload.display.displayMode === 'orgchart') {
+    stopNoticeRotation();
     $('shell').classList.add('org-chart-mode');
     $('shell').classList.remove('overview-mode');
     $('shell').classList.remove('prayer-mode');
+    $('shell').classList.remove('notice-board-mode');
     if (overviewRotationTimer) clearInterval(overviewRotationTimer);
     overviewRotationTimer = null;
     $('overviewBlock').hidden = true;
     $('employeeBlock').hidden = true;
     $('prayerBlock').hidden = true;
+    $('noticeBoardBlock').hidden = true;
     $('empty').hidden = true;
     renderOrgChart(payload);
     renderWeather();
@@ -206,13 +325,16 @@ function render(payload) {
   }
 
   if (payload.display && payload.display.displayMode === 'prayer') {
+    stopNoticeRotation();
     $('shell').classList.add('prayer-mode');
     $('shell').classList.remove('overview-mode');
     $('shell').classList.remove('org-chart-mode');
+    $('shell').classList.remove('notice-board-mode');
     if (overviewRotationTimer) clearInterval(overviewRotationTimer);
     overviewRotationTimer = null;
     $('overviewBlock').hidden = true;
     $('orgChartBlock').hidden = true;
+    $('noticeBoardBlock').hidden = true;
     $('employeeBlock').hidden = true;
     $('empty').hidden = true;
     renderPrayerBoard(payload);
@@ -224,6 +346,8 @@ function render(payload) {
   $('shell').classList.remove('overview-mode');
   $('shell').classList.remove('org-chart-mode');
   $('shell').classList.remove('prayer-mode');
+  $('shell').classList.remove('notice-board-mode');
+  stopNoticeRotation();
   if (overviewRotationTimer) clearInterval(overviewRotationTimer);
   overviewRotationTimer = null;
   if (orgState.timer) clearTimeout(orgState.timer);
@@ -237,6 +361,7 @@ function render(payload) {
   $('overviewBlock').hidden = true;
   $('orgChartBlock').hidden = true;
   $('prayerBlock').hidden = true;
+  $('noticeBoardBlock').hidden = true;
   $('employeeBlock').hidden = !employee;
   $('empty').hidden = !!employee;
   if (employee) {
@@ -966,10 +1091,12 @@ function renderWeather() {
     $('overviewWeatherText').textContent = '';
     $('orgWeatherText').textContent = '';
     $('prayerWeatherText').textContent = '';
+    $('noticeWeatherText').textContent = '';
     $('weatherIcon').hidden = true;
     $('overviewWeatherIcon').hidden = true;
     $('orgWeatherIcon').hidden = true;
     $('prayerWeatherIcon').hidden = true;
+    $('noticeWeatherIcon').hidden = true;
     return;
   }
   const unit = weather.units === 'imperial' ? '°F' : '°C';
@@ -977,21 +1104,144 @@ function renderWeather() {
   $('overviewWeatherText').textContent = `${weather.temperature}${unit}`;
   $('orgWeatherText').textContent = `${weather.temperature}${unit}`;
   $('prayerWeatherText').textContent = `${weather.temperature}${unit}`;
+  $('noticeWeatherText').textContent = `${weather.temperature}${unit}`;
   if (weather.icon) {
     $('weatherIcon').src = weather.icon;
     $('overviewWeatherIcon').src = weather.icon;
     $('orgWeatherIcon').src = weather.icon;
     $('prayerWeatherIcon').src = weather.icon;
+    $('noticeWeatherIcon').src = weather.icon;
     $('weatherIcon').hidden = false;
     $('overviewWeatherIcon').hidden = false;
     $('orgWeatherIcon').hidden = false;
     $('prayerWeatherIcon').hidden = false;
+    $('noticeWeatherIcon').hidden = false;
   } else {
     $('weatherIcon').hidden = true;
     $('overviewWeatherIcon').hidden = true;
     $('orgWeatherIcon').hidden = true;
     $('prayerWeatherIcon').hidden = true;
+    $('noticeWeatherIcon').hidden = true;
   }
+}
+
+function noticePairs() {
+  const pairs = [];
+  for (let index = 0; index < noticeState.notices.length; index += 2) {
+    pairs.push(noticeState.notices.slice(index, index + 2));
+  }
+  return pairs;
+}
+
+function noticeSignature(notices = []) {
+  return notices.map(notice => [
+    notice.id,
+    notice.title,
+    notice.englishPdfFile,
+    notice.arabicPdfFile,
+    notice.effectiveDate,
+    notice.displayOrder
+  ].join('|')).join('||');
+}
+
+function noticePairKey(pair = []) {
+  return pair.map(notice => `${notice.id}:${notice.englishPdfFile}:${notice.arabicPdfFile}`).join('|');
+}
+
+function formatNoticeDate(value, locale = 'en') {
+  if (!value) return '';
+  const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return safeText(value);
+  return date.toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function setNoticeLogo(company = {}) {
+  const logo = company.logo || settings.company?.logo || '';
+  if (logo) {
+    $('noticeLogo').src = logo;
+    $('noticeLogo').hidden = false;
+  } else {
+    $('noticeLogo').hidden = true;
+  }
+}
+
+function configureNoticeBrand(payload = {}) {
+  const display = payload.display || {};
+  const companies = Array.isArray(payload.rotationCompanies) && payload.rotationCompanies.length
+    ? payload.rotationCompanies
+    : [settings.company || {}].filter(company => company && company.logo);
+  const signature = companies.map(company => `${company.id || ''}:${company.logo || ''}`).join('|');
+  if (noticeState.logoSignature !== signature) {
+    noticeState.logoIndex = 0;
+    noticeState.logoSignature = signature;
+  }
+  stopNoticeLogoRotation();
+  setNoticeLogo(companies[noticeState.logoIndex] || settings.company || {});
+  const shouldRotate = !!display.rotateCompanyProfiles && companies.length > 1;
+  if (shouldRotate) {
+    const interval = Math.max(60, Number(display.rotationIntervalSeconds || 300) || 300) * 1000;
+    noticeState.logoTimer = setInterval(() => {
+      noticeState.logoIndex = (noticeState.logoIndex + 1) % companies.length;
+      setNoticeLogo(companies[noticeState.logoIndex] || settings.company || {});
+    }, interval);
+  }
+}
+
+function renderNoticeBoard(payload) {
+  configureNoticeBrand(payload);
+  $('noticeTitle').textContent = payload.display?.noticeBoardTitle || payload.display?.name || 'Notice Board';
+  const nextNotices = Array.isArray(payload.notices) ? payload.notices : [];
+  const nextSignature = noticeSignature(nextNotices);
+  const noticesChanged = noticeState.signature !== nextSignature;
+  if (!noticesChanged && $('noticeBoardBlock').hidden === false) return;
+  noticeState.notices = nextNotices;
+  noticeState.signature = nextSignature;
+  noticeState.renderedPairKey = '';
+  const pairs = noticePairs();
+  noticeState.pairIndex = Math.min(noticeState.pairIndex, Math.max(0, pairs.length - 1));
+  if (noticeState.timer) clearInterval(noticeState.timer);
+  noticeState.timer = null;
+  if (pairs.length > 1) {
+    noticeState.timer = setInterval(() => {
+      const total = noticePairs().length;
+      if (total <= 1) return;
+      noticeState.pairIndex = (noticeState.pairIndex + 1) % total;
+      renderNoticePair();
+    }, 30000);
+  }
+  $('noticeBoardBlock').hidden = false;
+  renderNoticePair();
+}
+
+function renderNoticePair() {
+  const pairs = noticePairs();
+  const total = pairs.length;
+  noticeState.pairIndex = Math.max(0, Math.min(noticeState.pairIndex, Math.max(0, total - 1)));
+  $('noticePrev').disabled = total <= 1;
+  $('noticeNext').disabled = total <= 1;
+  const pair = pairs[noticeState.pairIndex] || [];
+  $('noticeSubtitle').textContent = pair.map(notice => notice.title).filter(Boolean).join(' / ');
+  const key = noticePairKey(pair);
+  if (key && key === noticeState.renderedPairKey) return;
+  noticeState.renderedPairKey = key;
+  $('noticePairGrid').dataset.count = String(pair.length || 0);
+  if (!pair.length) {
+    $('noticePairGrid').innerHTML = '<div class="notice-board-empty">No active notices</div>';
+    return;
+  }
+  $('noticePairGrid').innerHTML = pair.map(notice => {
+    const englishSrc = safePdfPath(notice.englishPdfFile);
+    const arabicSrc = safePdfPath(notice.arabicPdfFile);
+    const englishDate = formatNoticeDate(notice.effectiveDate, 'en');
+    const arabicDate = formatNoticeDate(notice.effectiveDate, 'ar-SA');
+    return `<article class="notice-pair-card">
+      <div class="notice-pdf-split">
+        <section>${englishSrc ? `<canvas data-pdf-src="${safeText(englishSrc)}" role="img" aria-label="${safeText(notice.title)} English notice"></canvas><div class="notice-pdf-status">Loading PDF...</div><div class="notice-effective-date notice-effective-date-en"><span>Effective date</span><strong>${safeText(englishDate)}</strong></div>` : '<div class="notice-pdf-missing">Missing English PDF</div>'}</section>
+        <section dir="rtl">${arabicSrc ? `<canvas data-pdf-src="${safeText(arabicSrc)}" role="img" aria-label="${safeText(notice.title)} Arabic notice"></canvas><div class="notice-pdf-status">Loading PDF...</div><div class="notice-effective-date notice-effective-date-ar"><span>تاريخ السريان</span><strong>${safeText(arabicDate)}</strong></div>` : '<div class="notice-pdf-missing">Missing Arabic PDF</div>'}</section>
+      </div>
+    </article>`;
+  }).join('');
+  renderNoticePdfs();
 }
 
 function renderPrayerBoard(payload) {
@@ -1053,8 +1303,21 @@ function tick() {
   $('orgDate').textContent = now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
   $('prayerClock').textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12 });
   $('prayerDate').textContent = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+  $('noticeClock').textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12 });
   updatePrayerCountdowns();
 }
 
 setInterval(tick, 1000);
+$('noticePrev').onclick = () => {
+  const total = noticePairs().length;
+  if (total <= 1) return;
+  noticeState.pairIndex = (noticeState.pairIndex - 1 + total) % total;
+  renderNoticePair();
+};
+$('noticeNext').onclick = () => {
+  const total = noticePairs().length;
+  if (total <= 1) return;
+  noticeState.pairIndex = (noticeState.pairIndex + 1) % total;
+  renderNoticePair();
+};
 loadData().then(hideOffline).catch(() => scheduleOffline(1000));
