@@ -1,6 +1,6 @@
 # Polaris-by-mahaz
 
-Author: Riaz Rahman  
+Author: Riaz Rahman Bhuyan Mahaz
 GitHub: https://github.com/mahaz121/
 
 Polaris-by-mahaz is a centralized digital office system for browser and Raspberry Pi kiosk displays. It uses Node.js, Express, Socket.IO, static HTML/CSS/JavaScript, and SQLite.
