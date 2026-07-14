@@ -3,13 +3,12 @@ const bcrypt = require('bcryptjs');
 const { readJson, writeJson } = require('../utils/dataStore');
 const { requireAuth, userPermissions } = require('../middleware/auth');
 const { audit } = require('../utils/audit');
+const { ADMIN_SESSION_MS, DISPLAY_SESSION_MS, isDisplayOnlyUser } = require('../utils/sessionPolicy');
 const router = express.Router();
-const ADMIN_SESSION_MS = 8 * 60 * 60 * 1000;
-const DISPLAY_SESSION_MS = 90 * 24 * 60 * 60 * 1000;
 
 function isDisplayOnlySession(user = {}) {
   const permissions = userPermissions(user);
-  return permissions.length === 1 && permissions[0] === 'display.access';
+  return isDisplayOnlyUser(user, permissions);
 }
 
 router.post('/login', async (req, res) => {

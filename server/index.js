@@ -27,6 +27,7 @@ const { effectiveEmployeeStatus } = require('./utils/status');
 const { dailyTimesheet, todayString } = require('./utils/timesheet');
 const { emitPrayerEvent } = require('./socket');
 const { corsOrigin, ensureCsrfToken, rateLimit, requireCsrf, requireStrongSecret } = require('./utils/security');
+const { ADMIN_SESSION_MS, DISPLAY_SESSION_MS } = require('./utils/sessionPolicy');
 
 const app = express();
 const server = http.createServer(app);
@@ -40,7 +41,11 @@ app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 const sessionMiddleware = session({
-  store: new FileStore({ path: path.join(root, 'data', 'sessions') }),
+  store: new FileStore({
+    path: path.join(root, 'data', 'sessions'),
+    ttl: Math.ceil(DISPLAY_SESSION_MS / 1000),
+    reapInterval: 24 * 60 * 60
+  }),
   secret: requireStrongSecret('SESSION_SECRET', 32),
   resave: false,
   saveUninitialized: false,
@@ -48,7 +53,7 @@ const sessionMiddleware = session({
     httpOnly: true,
     secure: process.env.COOKIE_SECURE === '1' || (process.env.COOKIE_SECURE !== '0' && process.env.NODE_ENV === 'production'),
     sameSite: process.env.COOKIE_SAMESITE || 'lax',
-    maxAge: 8 * 60 * 60 * 1000
+    maxAge: ADMIN_SESSION_MS
   }
 });
 
