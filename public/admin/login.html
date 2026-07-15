@@ -50,15 +50,21 @@
           </div>
         </div>
         <div id="error" class="alert alert-danger d-none"></div>
-        <form id="loginForm">
+        <form id="loginForm" autocomplete="on">
           <div class="mb-3">
             <label class="form-label" for="username">Username</label>
-            <input id="username" class="form-control form-control-lg" name="username" autocomplete="username" required autofocus>
+            <input id="username" class="form-control form-control-lg" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" enterkeyhint="next" required autofocus>
           </div>
           <div class="mb-4">
             <label class="form-label" for="password">Password</label>
-            <input id="password" class="form-control form-control-lg" name="password" type="password" autocomplete="current-password" required>
+            <input id="password" class="form-control form-control-lg" name="password" type="password" autocomplete="current-password" enterkeyhint="go" required>
           </div>
+          <div class="form-check mb-4">
+            <input id="rememberMe" class="form-check-input" name="rememberMe" type="checkbox" checked>
+            <label class="form-check-label" for="rememberMe">Keep me signed in on this device</label>
+          </div>
+          <button id="keyboardBtn" class="polaris-keyboard-toggle mb-3" type="button" aria-expanded="false" aria-controls="screenKeyboard"><i class="bi bi-keyboard"></i> Use on-screen keyboard</button>
+          <div id="screenKeyboard" class="polaris-keyboard" aria-label="On-screen keyboard" hidden></div>
           <button id="loginBtn" class="btn btn-primary btn-lg w-100">Login</button>
         </form>
       </div>
@@ -71,6 +77,11 @@
     var loginPanel = document.getElementById('loginPanel');
     var showLoginBtn = document.getElementById('showLoginBtn');
     var closeLoginBtn = document.getElementById('closeLoginBtn');
+    var loginForm = document.getElementById('loginForm');
+    var keyboardBtn = document.getElementById('keyboardBtn');
+    var screenKeyboard = document.getElementById('screenKeyboard');
+    var activeInput = document.getElementById('username');
+    var keyboardShift = false;
     var next = new URLSearchParams(window.location.search).get('next') || '/admin/';
     var isDisplayLogin = next.indexOf('/display/') === 0 || next === '/setup';
     if (isDisplayLogin) {
@@ -83,11 +94,83 @@
     }
     showLoginBtn.addEventListener('click', function () {
       loginPanel.hidden = false;
-      document.getElementById('username').focus();
+      var username = document.getElementById('username');
+      username.focus({ preventScroll: true });
+      requestAnimationFrame(function () { username.focus({ preventScroll: true }); });
     });
     closeLoginBtn.addEventListener('click', function () {
       loginPanel.hidden = true;
       showLoginBtn.focus();
+    });
+    [document.getElementById('username'), document.getElementById('password')].forEach(function (input) {
+      input.addEventListener('focus', function () { activeInput = input; });
+      input.addEventListener('pointerdown', function () { activeInput = input; });
+    });
+    function writeKeyboardKey(value) {
+      if (!activeInput) return;
+      activeInput.focus({ preventScroll: true });
+      var start = activeInput.selectionStart == null ? activeInput.value.length : activeInput.selectionStart;
+      var end = activeInput.selectionEnd == null ? start : activeInput.selectionEnd;
+      if (value === 'Backspace') {
+        if (start === end && start > 0) start -= 1;
+        activeInput.setRangeText('', start, end, 'end');
+      } else if (value === 'Space') {
+        activeInput.setRangeText(' ', start, end, 'end');
+      } else {
+        activeInput.setRangeText(keyboardShift ? value.toUpperCase() : value, start, end, 'end');
+        if (keyboardShift) {
+          keyboardShift = false;
+          renderKeyboard();
+        }
+      }
+      activeInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    function renderKeyboard() {
+      var rows = [
+        ['1','2','3','4','5','6','7','8','9','0'],
+        ['q','w','e','r','t','y','u','i','o','p'],
+        ['a','s','d','f','g','h','j','k','l'],
+        ['Shift','z','x','c','v','b','n','m','Backspace'],
+        ['@','!','#','$','%','-','_','.','Space','Enter']
+      ];
+      screenKeyboard.innerHTML = '';
+      rows.forEach(function (keys) {
+        var row = document.createElement('div');
+        row.className = 'polaris-keyboard-row';
+        keys.forEach(function (key) {
+          var button = document.createElement('button');
+          button.type = 'button';
+          button.textContent = key === 'Backspace' ? '⌫' : key === 'Space' ? 'Space' : key === 'Enter' ? '↵' : keyboardShift && key.length === 1 ? key.toUpperCase() : key;
+          button.setAttribute('aria-label', key);
+          if (key.length > 1) button.className = 'polaris-key-wide';
+          if (key === 'Shift' && keyboardShift) button.classList.add('active');
+          button.addEventListener('pointerdown', function (event) { event.preventDefault(); });
+          button.addEventListener('click', function () {
+            if (key === 'Shift') {
+              keyboardShift = !keyboardShift;
+              renderKeyboard();
+            } else if (key === 'Enter') {
+              if (activeInput === loginForm.elements.username) {
+                activeInput = loginForm.elements.password;
+                activeInput.focus({ preventScroll: true });
+              } else {
+                loginForm.requestSubmit();
+              }
+            } else {
+              writeKeyboardKey(key);
+            }
+          });
+          row.appendChild(button);
+        });
+        screenKeyboard.appendChild(row);
+      });
+    }
+    renderKeyboard();
+    keyboardBtn.addEventListener('click', function () {
+      screenKeyboard.hidden = !screenKeyboard.hidden;
+      keyboardBtn.setAttribute('aria-expanded', String(!screenKeyboard.hidden));
+      keyboardBtn.innerHTML = screenKeyboard.hidden ? '<i class="bi bi-keyboard"></i> Use on-screen keyboard' : '<i class="bi bi-keyboard-fill"></i> Hide on-screen keyboard';
+      if (!screenKeyboard.hidden) activeInput.focus({ preventScroll: true });
     });
     document.addEventListener('keydown', function (event) {
       if (event.key === 'Escape' && !loginPanel.hidden) {
@@ -95,7 +178,7 @@
         showLoginBtn.focus();
       }
     });
-    document.getElementById('loginForm').addEventListener('submit', function (event) {
+    loginForm.addEventListener('submit', function (event) {
       event.preventDefault();
       if (!next.startsWith('/') || next.startsWith('//')) next = '/admin/';
       var form = event.target;
@@ -111,11 +194,22 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username: form.elements.username.value,
-          password: form.elements.password.value
+          password: form.elements.password.value,
+          rememberMe: form.elements.rememberMe.checked
         })
       }).then(function (response) {
         if (response.ok) {
-          window.location.replace(next);
+          var redirect = function () { window.location.replace(next); };
+          try {
+            if (window.PasswordCredential && navigator.credentials && navigator.credentials.store) {
+              var credential = new PasswordCredential({
+                id: form.elements.username.value,
+                password: form.elements.password.value,
+                name: form.elements.username.value
+              });
+              navigator.credentials.store(credential).catch(function () {}).finally(redirect);
+            } else redirect();
+          } catch (credentialError) { redirect(); }
           return null;
         }
         return response.json().then(function (data) {

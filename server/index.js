@@ -43,12 +43,13 @@ app.use(express.urlencoded({ extended: true }));
 const sessionMiddleware = session({
   store: new FileStore({
     path: path.join(root, 'data', 'sessions'),
-    ttl: Math.ceil(DISPLAY_SESSION_MS / 1000),
+    ttl: Math.ceil(Math.max(ADMIN_SESSION_MS, DISPLAY_SESSION_MS) / 1000),
     reapInterval: 24 * 60 * 60
   }),
   secret: requireStrongSecret('SESSION_SECRET', 32),
   resave: false,
   saveUninitialized: false,
+  rolling: true,
   cookie: {
     httpOnly: true,
     secure: process.env.COOKIE_SECURE === '1' || (process.env.COOKIE_SECURE !== '0' && process.env.NODE_ENV === 'production'),

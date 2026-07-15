@@ -3,16 +3,12 @@ const bcrypt = require('bcryptjs');
 const { readJson, writeJson } = require('../utils/dataStore');
 const { requireAuth, userPermissions } = require('../middleware/auth');
 const { audit } = require('../utils/audit');
-const { ADMIN_SESSION_MS, DISPLAY_SESSION_MS, isDisplayOnlyUser } = require('../utils/sessionPolicy');
+const { sessionLifetimeMs } = require('../utils/sessionPolicy');
 const router = express.Router();
-
-function isDisplayOnlySession(user = {}) {
-  const permissions = userPermissions(user);
-  return isDisplayOnlyUser(user, permissions);
-}
 
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
+  const rememberMe = req.body.rememberMe !== false;
   const users = await readJson('users.json', []);
   const user = users.find(u => u.username === username && u.active);
   if (!user) {
@@ -38,9 +34,10 @@ router.post('/login', async (req, res) => {
       username: user.username,
       role: user.role,
       permissions: userPermissions(user),
-      mustChangePassword: !!user.mustChangePassword
+      mustChangePassword: !!user.mustChangePassword,
+      rememberMe
     };
-    req.session.cookie.maxAge = isDisplayOnlySession(user) ? DISPLAY_SESSION_MS : ADMIN_SESSION_MS;
+    req.session.cookie.maxAge = sessionLifetimeMs(req.session.user, req.session.user.permissions);
     audit(req, 'auth.login_success', { userId: user.id, username: user.username });
     res.json({ ok: true, user: req.session.user, mustChangePassword: !!user.mustChangePassword });
   });

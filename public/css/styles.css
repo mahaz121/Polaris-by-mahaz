@@ -56,7 +56,7 @@ body[data-admin-page="about-developer"] .about-dev{border-radius:0;min-height:10
 .polaris-float-card span{color:#8ea4bf;font-size:.82rem;font-weight:700}
 .polaris-float-one{right:4%;top:6%}
 .polaris-float-two{right:13%;bottom:2%}
-.polaris-login-panel{position:fixed;z-index:10;inset:0;display:grid;place-items:center;padding:20px;background:rgba(2,8,23,.62);backdrop-filter:blur(8px)}
+.polaris-login-panel{position:fixed;z-index:10;inset:0;display:grid;place-items:center;padding:20px;overflow:auto;background:rgba(2,8,23,.62);backdrop-filter:blur(8px);touch-action:manipulation}
 .polaris-card{position:relative;width:min(460px,100%);border:1px solid rgba(56,189,248,.28);border-radius:14px;background:rgba(7,24,43,.94);box-shadow:0 28px 80px rgba(0,0,0,.45),0 0 42px rgba(56,189,248,.14);backdrop-filter:blur(22px);padding:clamp(24px,3vw,38px);overflow:hidden}
 .polaris-card:before{content:"";position:absolute;inset:0 0 auto;height:3px;background:linear-gradient(90deg,#38bdf8,#0ea5e9,#2563eb)}
 .polaris-card-head{display:flex;align-items:center;gap:14px;margin-bottom:26px}
@@ -65,7 +65,14 @@ body[data-admin-page="about-developer"] .about-dev{border-radius:0;min-height:10
 .polaris-card p{margin:4px 0 0;color:#8ea4bf;font-weight:700}
 .polaris-login-close{position:absolute;right:14px;top:12px;width:34px;height:34px;border:1px solid rgba(56,189,248,.28);border-radius:8px;background:rgba(8,20,38,.75);color:#eaf7ff;font-size:24px;line-height:1}
 .polaris-login .form-label{color:#c8dcf4;font-weight:850}
-.polaris-login .form-control{min-height:54px;background:rgba(8,20,38,.82);color:#eaf2ff;border:1px solid rgba(125,211,252,.24);border-radius:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
+.polaris-login .form-control{position:relative;z-index:1;min-height:54px;background:rgba(8,20,38,.82);color:#eaf2ff;border:1px solid rgba(125,211,252,.24);border-radius:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.04);pointer-events:auto;touch-action:manipulation;user-select:text;-webkit-user-select:text}
+.polaris-login .form-check-label{color:#c8dcf4;font-weight:750}
+.polaris-keyboard-toggle{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:9px 12px;border:1px solid rgba(125,211,252,.3);border-radius:9px;background:rgba(8,20,38,.75);color:#bae6fd;font-weight:800}
+.polaris-keyboard{display:grid;gap:5px;margin:0 -10px 14px;padding:9px;border:1px solid rgba(125,211,252,.2);border-radius:10px;background:#030b17;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.polaris-keyboard-row{display:flex;justify-content:center;gap:4px}
+.polaris-keyboard-row button{flex:1 1 0;min-width:0;min-height:38px;padding:4px 2px;border:1px solid rgba(125,211,252,.28);border-radius:6px;background:#10243c;color:#eaf7ff;font-size:clamp(.72rem,2.7vw,.92rem);font-weight:850;touch-action:manipulation}
+.polaris-keyboard-row button:active,.polaris-keyboard-row button.active{background:#0284c7;border-color:#7dd3fc}
+.polaris-keyboard-row .polaris-key-wide{flex-grow:1.6;font-size:.7rem}
 .polaris-login .form-control:focus{background:rgba(9,27,51,.94);color:#eaf2ff;border-color:#38bdf8;box-shadow:0 0 0 .2rem rgba(56,189,248,.16)}
 .polaris-login .btn-primary{min-height:54px;border-radius:10px;background:linear-gradient(135deg,#0369a1,#0284c7);border:1px solid rgba(125,211,252,.42);font-weight:900;box-shadow:0 0 28px rgba(56,189,248,.18)}
 .polaris-login .btn-primary:hover{filter:brightness(1.05)}

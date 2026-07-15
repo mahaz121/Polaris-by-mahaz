@@ -19,6 +19,7 @@ Polaris-by-mahaz is a centralized digital office system for browser and Raspberr
 - QR vCard generation when enabled for an employee.
 - OpenWeather integration through server-side configuration.
 - Session-based admin authentication with bcrypt password hashes.
+- Rolling remembered sessions (365 days by default) and a kiosk-safe on-screen login keyboard.
 
 ## Who Uses Polaris
 

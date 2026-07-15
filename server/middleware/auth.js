@@ -1,5 +1,5 @@
 const { readJson } = require('../utils/dataStore');
-const { DISPLAY_SESSION_MS, isDisplayOnlyUser } = require('../utils/sessionPolicy');
+const { sessionLifetimeMs } = require('../utils/sessionPolicy');
 
 const ALL_PERMISSIONS = [
   'dashboard.view',
@@ -54,9 +54,7 @@ async function refreshUserSession(req, res, next) {
       permissions: userPermissions(user),
       mustChangePassword: !!user.mustChangePassword
     };
-    if (isDisplayOnlyUser(req.session.user, req.session.user.permissions)) {
-      req.session.cookie.maxAge = DISPLAY_SESSION_MS;
-    }
+    req.session.cookie.maxAge = sessionLifetimeMs(req.session.user, req.session.user.permissions);
     return next();
   } catch (err) {
     return next(err);
