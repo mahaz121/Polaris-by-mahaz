@@ -504,9 +504,10 @@ function employees() {
   const actionHead = canEditEmployees ? '<th></th>' : '';
   const controls = canEditEmployees ? `
       <button class="btn btn-outline-primary btn-rounded" id="employeeSettingsBtn"><i class="bi bi-gear"></i> Employee Settings</button>
+      <button class="btn btn-outline-primary btn-rounded" id="importEmployeesBtn"><i class="bi bi-file-earmark-arrow-up"></i> Import Excel</button>
       <button class="btn btn-primary btn-rounded" id="addEmployeeBtn"><i class="bi bi-plus-lg"></i> Add</button>` : '';
   content.innerHTML = `
-    <div class="d-flex gap-2 mb-3">
+    <div class="d-flex flex-wrap gap-2 mb-3">
       <input id="searchEmp" class="form-control" placeholder="Search employees">
       ${canViewStatus ? `<select id="statusFilter" class="form-select w-auto"><option value="">All status</option>${statuses.map(s => `<option>${s}</option>`).join('')}</select>` : ''}
       ${canViewTimesheet ? '<button class="btn btn-outline-primary btn-rounded" id="timesheetBtn"><i class="bi bi-calendar-week"></i> Timesheet</button>' : ''}
@@ -527,6 +528,7 @@ function employees() {
   if (canEditEmployees) {
     $('#addEmployeeBtn').onclick = () => employeeForm();
     $('#employeeSettingsBtn').onclick = () => employeeSettingsModal();
+    $('#importEmployeesBtn').onclick = () => employeeImportForm();
     document.querySelectorAll('.edit-emp').forEach(b => b.onclick = () => employeeForm(b.dataset.id));
     document.querySelectorAll('.del-emp').forEach(b => b.onclick = () => deleteEmployee(b.dataset.id));
   }
@@ -825,6 +827,54 @@ function bindDisplayActions() {
       toast('Unable to copy display link', 'danger');
     }
   });
+}
+
+function employeeImportForm() {
+  $('#modalTitle').textContent = 'Import Employees from Excel';
+  $('#modalBody').innerHTML = `
+    <form id="employeeImportForm">
+      <div class="alert alert-info">
+        <strong>Required columns:</strong> Department, Employee Name, Designation, and Employee ID.
+        Company and Manager columns are ignored. Existing manager links are preserved.
+      </div>
+      <p class="text-muted small">Existing employees are updated by Employee ID. New IDs create employees. Employees missing from the workbook are not deleted.</p>
+      <label class="form-label" for="employeeImportFile">Excel workbook</label>
+      <input class="form-control" id="employeeImportFile" name="file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+      <div id="employeeImportProgress" class="progress mt-3" hidden>
+        <div class="progress-bar" role="progressbar" style="width:0%" aria-valuemin="0" aria-valuemax="100">0%</div>
+      </div>
+      <div id="employeeImportResult" class="mt-3"></div>
+      <button class="btn btn-primary mt-3" id="employeeImportSubmit" type="submit"><i class="bi bi-upload"></i> Import Employees</button>
+    </form>`;
+  modal.show();
+  $('#employeeImportForm').onsubmit = async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const submit = $('#employeeImportSubmit');
+    const progress = $('#employeeImportProgress');
+    const bar = progress.querySelector('.progress-bar');
+    const resultBox = $('#employeeImportResult');
+    submit.disabled = true;
+    progress.hidden = false;
+    resultBox.innerHTML = '';
+    try {
+      const result = await uploadWithProgress('/api/employees/import', 'POST', new FormData(form), percent => {
+        bar.style.width = `${percent}%`;
+        bar.textContent = `${percent}%`;
+        bar.setAttribute('aria-valuenow', String(percent));
+      });
+      resultBox.innerHTML = `<div class="alert alert-success mb-0">
+        Import completed: <strong>${esc(result.created)}</strong> created, <strong>${esc(result.updated)}</strong> updated,
+        <strong>${esc(result.unchanged)}</strong> unchanged, and <strong>${esc(result.departmentsCreated)}</strong> departments created.
+      </div>`;
+      submit.hidden = true;
+      toast(`Employee import completed: ${result.created} created, ${result.updated} updated`);
+      setTimeout(() => { modal.hide(); route(); }, 1200);
+    } catch (err) {
+      resultBox.innerHTML = `<div class="alert alert-danger mb-0">${esc(err.message)}</div>`;
+      submit.disabled = false;
+    }
+  };
 }
 
 function noticeFileName(path) {

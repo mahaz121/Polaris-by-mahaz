@@ -5,11 +5,13 @@ const { emitAllDisplays, emitAdminStats } = require('../socket');
 const { db, nowIso } = require('../utils/database');
 const { STATUSES, normalizeStatus, effectiveEmployeeStatus } = require('../utils/status');
 const { hasPermission } = require('../middleware/auth');
-const { IMAGE_MIME_TYPES, safeUpload } = require('../utils/security');
+const { IMAGE_MIME_TYPES, XLSX_MIME_TYPES, safeMemoryUpload, safeUpload } = require('../utils/security');
 const { audit } = require('../utils/audit');
+const { EmployeeImportValidationError, importEmployeeRows, parseEmployeeWorkbook } = require('../utils/employeeImport');
 const router = express.Router();
 
 const upload = safeUpload({ fieldTypes: { photo: IMAGE_MIME_TYPES }, maxFileSize: 5 * 1024 * 1024 });
+const spreadsheetUpload = safeMemoryUpload({ fieldTypes: { file: XLSX_MIME_TYPES }, maxFileSize: 10 * 1024 * 1024 });
 
 function normalizeCompanyEmailLocalPart(value = '') {
   return String(value || '')
@@ -68,6 +70,23 @@ router.get('/', async (req, res) => {
 });
 
 router.get('/statuses', (req, res) => res.json(STATUSES));
+
+router.post('/import', (req, res, next) => hasPermission(req.session.user, 'employees.manage') ? next() : res.status(403).json({ error: 'Access denied' }), spreadsheetUpload.single('file'), async (req, res, next) => {
+  if (!req.file) return res.status(400).json({ error: 'Select an .xlsx file to import.' });
+  try {
+    const parsed = await parseEmployeeWorkbook(req.file.buffer);
+    const result = importEmployeeRows(db, parsed.rows);
+    audit(req, 'employees.import', { ...result, sheetName: parsed.sheetName });
+    await emitAllDisplays();
+    await emitAdminStats();
+    return res.json({ ...result, sheetName: parsed.sheetName });
+  } catch (err) {
+    if (err instanceof EmployeeImportValidationError) {
+      return res.status(400).json({ error: err.message, details: err.details });
+    }
+    return next(err);
+  }
+});
 
 router.post('/', (req, res, next) => hasPermission(req.session.user, 'employees.manage') ? next() : res.status(403).json({ error: 'Access denied' }), upload.single('photo'), async (req, res) => {
   const employees = await readJson('employees.json', []);

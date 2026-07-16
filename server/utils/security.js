@@ -102,18 +102,33 @@ function extensionFor(mime) {
   }[mime] || '.bin';
 }
 
+function safeMemoryUpload({ fieldTypes, maxFileSize = 10 * 1024 * 1024, maxFiles = 1 }) {
+  return multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: maxFileSize, files: maxFiles },
+    fileFilter: (req, file, cb) => {
+      const allowed = fieldTypes[file.fieldname] || fieldTypes['*'] || [];
+      if (allowed.includes(file.mimetype)) return cb(null, true);
+      return cb(new Error('Unsupported file type'));
+    }
+  });
+}
+
 const IMAGE_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 const AUDIO_MIME_TYPES = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/ogg'];
 const PDF_MIME_TYPES = ['application/pdf'];
+const XLSX_MIME_TYPES = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
 
 module.exports = {
   AUDIO_MIME_TYPES,
   IMAGE_MIME_TYPES,
   PDF_MIME_TYPES,
+  XLSX_MIME_TYPES,
   corsOrigin,
   ensureCsrfToken,
   rateLimit,
   requireCsrf,
   requireStrongSecret,
-  safeUpload
+  safeUpload,
+  safeMemoryUpload
 };
